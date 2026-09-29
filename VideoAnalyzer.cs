@@ -43,8 +43,9 @@ internal sealed class VideoAnalyzer
             progress.Report($"Fundo detectado: #{background.R:X2}{background.G:X2}{background.B:X2}");
             var bounds = DetectSubjectBounds(frames, background, info.Width, info.Height);
 
+            var previewSecond = Math.Min(info.Duration / 2, 5);
             var preview = await CreatePreviewAsync(videoPath, background, bounds, info, similarity, blend,
-                zoomPercent, horizontalOffset, verticalOffset, cancellationToken);
+                zoomPercent, horizontalOffset, verticalOffset, previewSecond, cancellationToken);
             return new AnalysisResult(background, bounds, info, preview, confidence);
         }
         finally
@@ -55,21 +56,23 @@ internal sealed class VideoAnalyzer
 
     public Task<string> CreatePreviewAsync(string videoPath, AnalysisResult analysis, double similarity,
         double blend, double zoomPercent, int horizontalOffset, int verticalOffset,
-        CancellationToken cancellationToken) =>
+        double positionSeconds, CancellationToken cancellationToken) =>
         CreatePreviewAsync(videoPath, analysis.BackgroundColor, analysis.SubjectBounds, analysis.Video,
-            similarity, blend, zoomPercent, horizontalOffset, verticalOffset, cancellationToken);
+            similarity, blend, zoomPercent, horizontalOffset, verticalOffset, positionSeconds, cancellationToken);
 
     private async Task<string> CreatePreviewAsync(string videoPath, Color background, Rectangle bounds,
         VideoInfo info, double similarity, double blend, double zoomPercent, int horizontalOffset,
-        int verticalOffset, CancellationToken cancellationToken)
+        int verticalOffset, double positionSeconds, CancellationToken cancellationToken)
     {
         var preview = Path.Combine(Path.GetTempPath(), "VFL-WebM-preview-" + Guid.NewGuid().ToString("N") + ".png");
         var filter = BuildVideoFilter(background, bounds, similarity, blend, zoomPercent,
             horizontalOffset, verticalOffset);
         try
         {
+            var finalFrameSecond = Math.Max(0, info.Duration - 1 / Math.Max(1, info.FrameRate));
+            var seekSecond = Math.Clamp(positionSeconds, 0, finalFrameSecond);
             await RunAsync(_ffmpeg,
-                ["-y", "-ss", Math.Min(info.Duration / 2, 5).ToString("0.###", CultureInfo.InvariantCulture),
+                ["-y", "-ss", seekSecond.ToString("0.###", CultureInfo.InvariantCulture),
                  "-i", videoPath, "-frames:v", "1", "-vf", filter, preview], cancellationToken);
             return preview;
         }

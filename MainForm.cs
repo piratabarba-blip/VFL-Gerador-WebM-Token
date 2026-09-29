@@ -32,16 +32,34 @@ internal sealed class MainForm : Form
     private readonly TokenProgressBar _progress = new() { Dock = DockStyle.Fill };
     private readonly Button _render = new() { Text = "GERAR WEBM", Tag = "primary" };
     private readonly Button _cancel = new() { Text = "CANCELAR", Enabled = false };
+    private readonly TrackBar _timeline = new()
+    {
+        Minimum = 0, Maximum = 10_000, Value = 0, TickStyle = TickStyle.None,
+        Dock = DockStyle.Fill, Enabled = false, SmallChange = 25, LargeChange = 250
+    };
+    private readonly Button _play = new() { Text = "▶  PLAY", Enabled = false };
+    private readonly Button _pause = new() { Text = "Ⅱ  PAUSA", Enabled = false };
+    private readonly Button _stop = new() { Text = "■  STOP", Enabled = false };
+    private readonly Label _previewTime = new()
+    {
+        Text = "00:00 / 00:00", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight,
+        ForeColor = Theme.Muted, Font = new Font("Segoe UI Semibold", 8.5f)
+    };
     private readonly System.Windows.Forms.Timer _previewDebounce = new() { Interval = 280 };
+    private readonly System.Windows.Forms.Timer _playbackTimer = new() { Interval = 250 };
+    private readonly Stopwatch _playbackClock = new();
     private AnalysisResult? _analysis;
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _previewCts;
+    private double _previewPositionSeconds;
+    private double _playbackStartPosition;
+    private bool _previewFrameLoading;
 
     public MainForm()
     {
         Text = "VFL Gerador WebM Token";
-        Size = new Size(1120, 760);
-        MinimumSize = new Size(1100, 760);
+        Size = new Size(1120, 860);
+        MinimumSize = new Size(1100, 780);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 10);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -61,9 +79,21 @@ internal sealed class MainForm : Form
             _previewDebounce.Stop();
             await RefreshPreviewAsync();
         };
+        _timeline.Scroll += (_, _) =>
+        {
+            PausePlayback();
+            _previewPositionSeconds = TimelineToSeconds();
+            UpdatePreviewTime();
+            SchedulePreviewRefresh();
+        };
+        _play.Click += (_, _) => StartPlayback();
+        _pause.Click += (_, _) => PausePlayback();
+        _stop.Click += async (_, _) => await StopPlaybackAsync();
+        _playbackTimer.Tick += async (_, _) => await AdvancePlaybackAsync();
         FormClosed += (_, _) =>
         {
             _previewDebounce.Stop();
+            _playbackTimer.Stop();
             _previewCts?.Cancel();
             _previewCts?.Dispose();
         };
@@ -153,10 +183,29 @@ internal sealed class MainForm : Form
         settings.Controls.Add(new Label { Text = "Prévia automática • Saída 1080×1080 • 24 FPS • VP9 transparente\nZoom 100% e posições X/Y 0 mantêm o enquadramento automático.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.5f) }, 0, 11);
         content.Controls.Add(settings, 0, 0);
 
-        var previewCard = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(16), Tag = "rounded-surface", Margin = new Padding(12, 0, 0, 0) };
-        previewCard.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); previewCard.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var previewCard = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Padding = new Padding(16), Tag = "rounded-surface", Margin = new Padding(12, 0, 0, 0) };
+        previewCard.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        previewCard.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        previewCard.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
         previewCard.Controls.Add(new Label { Text = "PRÉ-VISUALIZAÇÃO TRANSPARENTE", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI Semibold", 8.5f) }, 0, 0);
-        previewCard.Controls.Add(_preview, 0, 1); content.Controls.Add(previewCard, 1, 0);
+        previewCard.Controls.Add(_preview, 0, 1);
+
+        var playback = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 2, Tag = "surface", Margin = new Padding(0, 6, 0, 0) };
+        playback.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        playback.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        playback.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        playback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+        _timeline.Margin = new Padding(0, 2, 8, 0); playback.Controls.Add(_timeline, 0, 0);
+        playback.Controls.Add(_previewTime, 1, 0);
+        var playbackButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, Tag = "surface", WrapContents = false, FlowDirection = FlowDirection.LeftToRight, Padding = Padding.Empty };
+        foreach (var button in new[] { _play, _pause, _stop })
+        {
+            button.Width = 96; button.Height = 34; button.Margin = new Padding(0, 2, 8, 0);
+            playbackButtons.Controls.Add(button);
+        }
+        playback.Controls.Add(playbackButtons, 0, 1); playback.SetColumnSpan(playbackButtons, 2);
+        previewCard.Controls.Add(playback, 0, 2);
+        content.Controls.Add(previewCard, 1, 0);
 
         var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 2, Padding = new Padding(28, 10, 28, 16), Tag = "background" };
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
@@ -210,6 +259,7 @@ internal sealed class MainForm : Form
     private async Task AnalyzeAsync()
     {
         if (!File.Exists(_input.Text)) { TokenDialog.ShowMessage(this, "Vídeo necessário", "Selecione um vídeo válido."); return; }
+        PausePlayback();
         _cts = new CancellationTokenSource(); SetBusy(true);
         try
         {
@@ -221,6 +271,8 @@ internal sealed class MainForm : Form
             _detected.Text = $"#{_analysis.BackgroundColor.R:X2}{_analysis.BackgroundColor.G:X2}{_analysis.BackgroundColor.B:X2}  •  confiança {_analysis.Confidence:P0}";
             _preview.PreviewImage = LoadImage(_analysis.PreviewPath);
             try { File.Delete(_analysis.PreviewPath); } catch { }
+            SetPreviewPosition(Math.Min(_analysis.Video.Duration / 2, 5));
+            SetPlaybackControlsEnabled(true);
             _status.Text = $"Prévia pronta • Zoom {_zoom.Value:0}% • X {_positionX.Value:+0;-0;0} • Y {_positionY.Value:+0;-0;0}";
         }
         catch (OperationCanceledException) { _status.Text = "Análise cancelada."; }
@@ -237,6 +289,7 @@ internal sealed class MainForm : Form
             _output.Text = GetAvailableOutputPath(_output.Text);
             _status.Text = "Novo nome criado para evitar o cache do Foundry.";
         }
+        PausePlayback();
         _cts = new CancellationTokenSource(); SetBusy(true);
         try
         {
@@ -266,6 +319,14 @@ internal sealed class MainForm : Form
         _render.Enabled = !busy; _cancel.Enabled = busy;
         _similarity.Enabled = !busy; _blend.Enabled = !busy; _zoom.Enabled = !busy;
         _positionX.Enabled = !busy; _positionY.Enabled = !busy;
+        _timeline.Enabled = !busy && _analysis is not null;
+        if (busy)
+        {
+            _playbackTimer.Stop();
+            _playbackClock.Stop();
+            _play.Enabled = false; _pause.Enabled = false; _stop.Enabled = false;
+        }
+        else SetPlaybackControlsEnabled(_analysis is not null);
     }
 
     private void SchedulePreviewRefresh()
@@ -280,18 +341,20 @@ internal sealed class MainForm : Form
         if (_analysis is null || _cts is not null || !File.Exists(_input.Text)) return;
         _previewCts?.Cancel();
         _previewCts?.Dispose();
-        _previewCts = new CancellationTokenSource();
-        var token = _previewCts.Token;
+        var previewCts = new CancellationTokenSource();
+        _previewCts = previewCts;
+        var token = previewCts.Token;
         string? previewPath = null;
+        _previewFrameLoading = true;
         try
         {
             _status.Text = "Atualizando prévia...";
             previewPath = await new VideoAnalyzer().CreatePreviewAsync(_input.Text, _analysis,
                 (double)_similarity.Value, (double)_blend.Value, (double)_zoom.Value,
-                (int)_positionX.Value, (int)_positionY.Value, token);
+                (int)_positionX.Value, (int)_positionY.Value, _previewPositionSeconds, token);
             if (token.IsCancellationRequested) return;
             _preview.PreviewImage = LoadImage(previewPath);
-            _status.Text = $"Prévia automática • Zoom {_zoom.Value:0}% • X {_positionX.Value:+0;-0;0} • Y {_positionY.Value:+0;-0;0}";
+            _status.Text = $"Prévia {FormatTime(_previewPositionSeconds)} • Zoom {_zoom.Value:0}% • X {_positionX.Value:+0;-0;0} • Y {_positionY.Value:+0;-0;0}";
         }
         catch (OperationCanceledException) { }
         catch (Exception exception)
@@ -301,7 +364,89 @@ internal sealed class MainForm : Form
         finally
         {
             if (previewPath is not null) try { File.Delete(previewPath); } catch { }
+            if (ReferenceEquals(_previewCts, previewCts))
+            {
+                _previewCts.Dispose();
+                _previewCts = null;
+                _previewFrameLoading = false;
+            }
         }
+    }
+
+    private void StartPlayback()
+    {
+        if (_analysis is null || _cts is not null) return;
+        if (_previewPositionSeconds >= _analysis.Video.Duration - 0.05) SetPreviewPosition(0);
+        _playbackStartPosition = _previewPositionSeconds;
+        _playbackClock.Restart();
+        _playbackTimer.Start();
+        _play.Enabled = false; _pause.Enabled = true; _stop.Enabled = true;
+        _status.Text = "Reproduzindo prévia para conferir o enquadramento...";
+    }
+
+    private void PausePlayback()
+    {
+        _playbackTimer.Stop();
+        _playbackClock.Stop();
+        SetPlaybackControlsEnabled(_analysis is not null && _cts is null);
+    }
+
+    private async Task StopPlaybackAsync()
+    {
+        PausePlayback();
+        if (_analysis is null) return;
+        SetPreviewPosition(0);
+        await RefreshPreviewAsync();
+    }
+
+    private async Task AdvancePlaybackAsync()
+    {
+        if (_analysis is null || _previewFrameLoading) return;
+        var target = _playbackStartPosition + _playbackClock.Elapsed.TotalSeconds;
+        if (target >= _analysis.Video.Duration)
+        {
+            SetPreviewPosition(_analysis.Video.Duration);
+            PausePlayback();
+            await RefreshPreviewAsync();
+            _status.Text = "Fim da prévia — enquadramento conferido até o último quadro.";
+            return;
+        }
+        SetPreviewPosition(target);
+        await RefreshPreviewAsync();
+    }
+
+    private void SetPreviewPosition(double seconds)
+    {
+        if (_analysis is null) return;
+        _previewPositionSeconds = Math.Clamp(seconds, 0, _analysis.Video.Duration);
+        _timeline.Value = _analysis.Video.Duration <= 0
+            ? 0
+            : Math.Clamp((int)Math.Round(_previewPositionSeconds / _analysis.Video.Duration * _timeline.Maximum), 0, _timeline.Maximum);
+        UpdatePreviewTime();
+    }
+
+    private double TimelineToSeconds() => _analysis is null || _timeline.Maximum == 0
+        ? 0
+        : _timeline.Value / (double)_timeline.Maximum * _analysis.Video.Duration;
+
+    private void UpdatePreviewTime()
+    {
+        var duration = _analysis?.Video.Duration ?? 0;
+        _previewTime.Text = $"{FormatTime(_previewPositionSeconds)} / {FormatTime(duration)}";
+    }
+
+    private void SetPlaybackControlsEnabled(bool enabled)
+    {
+        _timeline.Enabled = enabled;
+        _play.Enabled = enabled && !_playbackTimer.Enabled;
+        _pause.Enabled = enabled && _playbackTimer.Enabled;
+        _stop.Enabled = enabled;
+    }
+
+    private static string FormatTime(double seconds)
+    {
+        var time = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return time.TotalHours >= 1 ? time.ToString(@"hh\:mm\:ss") : time.ToString(@"mm\:ss");
     }
 
     private static Image LoadImage(string path)
