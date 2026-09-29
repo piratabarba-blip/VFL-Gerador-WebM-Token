@@ -12,15 +12,16 @@ Aplicativo Windows para transformar vídeos com fundo sólido — verde, azul ou
 - Remoção de fundo com máscara alfa reforçada.
 - Zoom e posicionamento horizontal/vertical com atualização automática.
 - Saída fixa em 1080×1080, 24 FPS, VP9 com alfa.
-- Preset confirmado com o perfil **Alpha VP9** do Kdenlive.
+- FFmpeg 8.1 e FFprobe portáteis incluídos no pacote para Windows.
+- Preset **Alpha VP9** confirmado para uso no Foundry VTT.
 - Áudio opcional em Vorbis.
 - Nomes sequenciais para evitar cache do Foundry.
 - Processamento totalmente local; o vídeo original nunca é alterado.
 - Interface escura.
 
-## Requisito importante
+## Requisitos
 
-Instale o [Kdenlive](https://kdenlive.org/) antes de usar. O programa utiliza automaticamente o FFmpeg 8 incluído no Kdenlive, pois foi o motor confirmado como compatível com transparência VP9 no Foundry VTT.
+Windows 10 ou 11 de 64 bits. O pacote da seção **Releases** já inclui o FFmpeg necessário: não é preciso instalar Kdenlive, codecs ou outros programas.
 
 ## Como usar
 
@@ -45,7 +46,7 @@ Reprodutores comuns podem mostrar o fundo verde porque não interpretam alfa em 
 
 ## Compilar o código
 
-Requisitos: Windows, .NET 8 SDK e Kdenlive instalado.
+Requisitos para desenvolvimento: Windows e .NET 8 SDK. Para publicar uma distribuição completa, coloque a versão Windows compartilhada do FFmpeg 8.1 dentro de `Tools` antes de executar `dotnet publish`.
 
 ```powershell
 dotnet build -c Release
@@ -57,3 +58,5 @@ dotnet publish -c Release -r win-x64 --self-contained true
 Uso pessoal e não comercial permitido. Venda e uso comercial são proibidos sem autorização. Este é um projeto **source-available**, não uma licença open source aprovada pela OSI.
 
 Consulte [LICENSE.md](LICENSE.md) para os termos completos.
+
+O FFmpeg incluído na distribuição mantém sua própria licença GPL. Consulte [FFMPEG-NOTICE.md](FFMPEG-NOTICE.md) e `THIRD-PARTY-FFMPEG-LICENSE.txt`.

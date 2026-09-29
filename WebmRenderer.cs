@@ -6,7 +6,8 @@ namespace VFL.GeradorWebMToken;
 
 internal sealed class WebmRenderer
 {
-    private readonly string _ffmpeg = VideoAnalyzer.FindTool("ffmpeg") ?? throw new InvalidOperationException("FFmpeg não encontrado.");
+    private readonly string _ffmpeg = VideoAnalyzer.FindTool("ffmpeg") ?? throw new InvalidOperationException(
+        "FFmpeg portátil não encontrado. Extraia novamente a pasta completa do programa.");
 
     public async Task RenderAsync(string input, string output, AnalysisResult analysis, double similarity,
         double blend, double zoomPercent, int horizontalOffset, int verticalOffset,

@@ -9,3 +9,5 @@ obj/
 *.mkv
 *.zip
 publish/
+Tools/
+.ffmpeg-download/

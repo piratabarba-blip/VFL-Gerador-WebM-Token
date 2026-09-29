@@ -11,8 +11,10 @@ internal sealed class VideoAnalyzer
 
     public VideoAnalyzer()
     {
-        _ffmpeg = FindTool("ffmpeg") ?? throw new InvalidOperationException("ffmpeg.exe não encontrado na pasta Tools.");
-        _ffprobe = FindTool("ffprobe") ?? throw new InvalidOperationException("ffprobe.exe não encontrado na pasta Tools.");
+        _ffmpeg = FindTool("ffmpeg") ?? throw new InvalidOperationException(
+            "FFmpeg portátil não encontrado. Extraia novamente a pasta completa do programa.");
+        _ffprobe = FindTool("ffprobe") ?? throw new InvalidOperationException(
+            "FFprobe portátil não encontrado. Extraia novamente a pasta completa do programa.");
     }
 
     public async Task<AnalysisResult> AnalyzeAsync(string videoPath, double similarity, double blend, double zoomPercent,
@@ -201,10 +203,8 @@ internal sealed class VideoAnalyzer
 
     internal static string? FindTool(string name)
     {
-        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var candidates = new[]
         {
-            Path.Combine(programFiles, "Kdenlive", "bin", name + ".exe"),
             Path.Combine(AppContext.BaseDirectory, "Tools", name + ".exe"),
             name + ".exe"
         };

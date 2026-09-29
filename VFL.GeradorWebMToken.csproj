@@ -18,7 +18,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Content Include="Assets\app-icon.ico" Link="VFL-Gerador-WebM-Token.ico" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Tools\**\*" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="README.md" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="LICENSE.md" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="FFMPEG-NOTICE.md" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="THIRD-PARTY-FFMPEG-LICENSE.txt" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
