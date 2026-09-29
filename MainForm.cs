@@ -105,7 +105,7 @@ internal sealed class MainForm : Form
             Margin = Padding.Empty
         }, 0, 1);
         header.Controls.Add(title, 1, 0);
-        header.Controls.Add(new Label { Text = "PROCESSAMENTO LOCAL  |  v1.0", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleRight, Font = new Font("Segoe UI", 8.5f) }, 2, 0);
+        header.Controls.Add(new Label { Text = "PROCESSAMENTO LOCAL  |  v2.0", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleRight, Font = new Font("Segoe UI", 8.5f) }, 2, 0);
         root.Controls.Add(header, 0, 0);
 
         var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(28, 20, 28, 8), Tag = "background" };

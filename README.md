@@ -34,7 +34,7 @@ Windows 10 ou 11 de 64 bits. O pacote da seção **Releases** já inclui o FFmpe
 
 Reprodutores comuns podem mostrar o fundo verde porque não interpretam alfa em VP9. Dentro do Foundry, o fundo fica transparente.
 
-## Configuração padrão da versão 1.0
+## Configuração padrão da versão 2.0
 
 - Tolerância: `0,023`
 - Suavização: `0,30`

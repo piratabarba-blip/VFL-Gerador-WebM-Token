@@ -8,7 +8,8 @@
     <AssemblyName>VFL.GeradorWebMToken</AssemblyName>
     <RootNamespace>VFL.GeradorWebMToken</RootNamespace>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
-    <Version>1.0.0</Version>
+    <Version>2.0.0</Version>
+    <InformationalVersion>2.0.0</InformationalVersion>
     <AssemblyTitle>VFL Gerador WebM Token</AssemblyTitle>
     <Product>VFL Gerador WebM Token</Product>
     <Company>VFL</Company>
