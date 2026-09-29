@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.webm
+*.mp4
+*.mov
+*.mkv
+*.zip
+publish/
