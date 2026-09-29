@@ -246,7 +246,14 @@ internal sealed class MainForm : Form
                 (double)_similarity.Value, (double)_blend.Value, (double)_zoom.Value,
                 (int)_positionX.Value, (int)_positionY.Value,
                 preset, _keepAudio.Checked, progress, _cts.Token);
-            if (TokenDialog.Confirm(this, "WebM concluído", "WebM transparente concluído!\n\nDeseja abrir a pasta?"))
+            var thumbnailPath = Path.Combine(
+                Path.GetDirectoryName(Path.GetFullPath(_output.Text)) ?? "",
+                Path.GetFileNameWithoutExtension(_output.Text) + "_PREVIA.png");
+            var thumbnailCreated = _preview.SaveThumbnail(thumbnailPath);
+            var completedMessage = thumbnailCreated
+                ? $"WebM transparente e miniatura concluídos!\n\nMiniatura: {Path.GetFileName(thumbnailPath)}\n\nDeseja abrir a pasta?"
+                : "WebM transparente concluído!\n\nDeseja abrir a pasta?";
+            if (TokenDialog.Confirm(this, "WebM concluído", completedMessage))
                 Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{_output.Text}\"") { UseShellExecute = true });
         }
         catch (OperationCanceledException) { _status.Text = "Conversão cancelada."; }
