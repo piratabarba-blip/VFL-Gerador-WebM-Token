@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Drawing.Imaging;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace VFL.GeradorWebMToken;
@@ -59,6 +61,65 @@ internal sealed class VideoAnalyzer
         double positionSeconds, CancellationToken cancellationToken) =>
         CreatePreviewAsync(videoPath, analysis.BackgroundColor, analysis.SubjectBounds, analysis.Video,
             similarity, blend, zoomPercent, horizontalOffset, verticalOffset, positionSeconds, cancellationToken);
+
+    public async Task StreamPreviewAsync(string videoPath, AnalysisResult analysis, double similarity,
+        double blend, double zoomPercent, int horizontalOffset, int verticalOffset,
+        double positionSeconds, Func<Bitmap, double, Task> showFrame, CancellationToken cancellationToken)
+    {
+        const int previewSize = 500;
+        const double previewFps = 24;
+        var finalFrameSecond = Math.Max(0, analysis.Video.Duration - 1 / Math.Max(1, analysis.Video.FrameRate));
+        var seekSecond = Math.Clamp(positionSeconds, 0, finalFrameSecond);
+        var filter = BuildVideoFilter(analysis.BackgroundColor, analysis.SubjectBounds, similarity, blend,
+            zoomPercent, horizontalOffset, verticalOffset) +
+            $",scale={previewSize}:{previewSize}:flags=fast_bilinear,fps={previewFps.ToString(CultureInfo.InvariantCulture)},format=bgra";
+        var psi = new ProcessStartInfo(_ffmpeg)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardErrorEncoding = System.Text.Encoding.UTF8
+        };
+        foreach (var argument in new[]
+        {
+            "-hide_banner", "-loglevel", "error", "-re", "-ss",
+            seekSecond.ToString("0.###", CultureInfo.InvariantCulture), "-i", videoPath,
+            "-an", "-sn", "-dn", "-vf", filter, "-f", "rawvideo", "-pix_fmt", "bgra", "pipe:1"
+        }) psi.ArgumentList.Add(argument);
+
+        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Não foi possível iniciar a prévia do FFmpeg.");
+        using var cancellationRegistration = cancellationToken.Register(() =>
+        {
+            try { if (!process.HasExited) process.Kill(true); } catch { }
+        });
+        var errorTask = process.StandardError.ReadToEndAsync();
+        var frameBytes = new byte[previewSize * previewSize * 4];
+        var frameIndex = 0L;
+        try
+        {
+            while (await ReadFrameAsync(process.StandardOutput.BaseStream, frameBytes, cancellationToken))
+            {
+                var bitmap = CreateBitmap(frameBytes, previewSize, previewSize);
+                try
+                {
+                    await showFrame(bitmap, Math.Min(analysis.Video.Duration, seekSecond + frameIndex / previewFps));
+                }
+                catch
+                {
+                    bitmap.Dispose();
+                    throw;
+                }
+                frameIndex++;
+            }
+            await process.WaitForExitAsync(cancellationToken);
+            var error = await errorTask;
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException("Falha ao reproduzir a prévia.\n" + error[^Math.Min(error.Length, 2000)..]);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
+    }
 
     private async Task<string> CreatePreviewAsync(string videoPath, Color background, Rectangle bounds,
         VideoInfo info, double similarity, double blend, double zoomPercent, int horizontalOffset,
@@ -120,6 +181,34 @@ internal sealed class VideoAnalyzer
     }
 
     private static int Even(int value) => Math.Max(2, value - value % 2);
+
+    private static async Task<bool> ReadFrameAsync(Stream stream, byte[] buffer, CancellationToken cancellationToken)
+    {
+        var read = 0;
+        while (read < buffer.Length)
+        {
+            var count = await stream.ReadAsync(buffer.AsMemory(read), cancellationToken);
+            if (count == 0) return false;
+            read += count;
+        }
+        return true;
+    }
+
+    private static Bitmap CreateBitmap(byte[] bgra, int width, int height)
+    {
+        var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+        var data = bitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.WriteOnly,
+            PixelFormat.Format32bppArgb);
+        try
+        {
+            Marshal.Copy(bgra, 0, data.Scan0, bgra.Length);
+        }
+        finally
+        {
+            bitmap.UnlockBits(data);
+        }
+        return bitmap;
+    }
 
     private static (Color Color, double Confidence) DetectBackground(IEnumerable<string> framePaths)
     {
