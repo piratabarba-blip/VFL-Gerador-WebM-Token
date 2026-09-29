@@ -17,6 +17,7 @@
     <Description>Converte vídeos com fundo sólido em tokens WebM VP9 transparentes para Foundry VTT.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="Assets\app-icon.ico" Link="VFL-Gerador-WebM-Token.ico" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="README.md" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="LICENSE.md" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
