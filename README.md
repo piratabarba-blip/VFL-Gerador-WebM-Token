@@ -9,6 +9,8 @@ Aplicativo Windows para transformar vídeos com fundo sólido — verde, azul ou
 - Detecção automática da cor de fundo.
 - Pré-visualização transparente em referência fixa 1:1.
 - Linha do tempo com precisão de milissegundos e reprodução fluida a 24 FPS, com Play, Pausa e Stop.
+- Botão **Limpar / próximo** que prepara outro vídeo sem perder os ajustes.
+- Preferências salvas automaticamente entre vídeos e ao fechar o programa.
 - Miniatura PNG automática com o mesmo enquadramento e quadriculado da prévia.
 - Remoção de fundo com máscara alfa reforçada.
 - Zoom e posicionamento horizontal/vertical com atualização automática.
@@ -37,9 +39,9 @@ Reprodutores comuns podem mostrar o fundo verde porque não interpretam alfa em 
 
 ## Configuração padrão da versão 2.0
 
-- Tolerância: `0,023`
+- Tolerância: `0,260`
 - Suavização: `0,30`
-- Qualidade: Equilibrada (`CRF 15`)
+- Qualidade: Alta (`CRF 5`)
 - Bitrate: `20M`
 - GOP: `15`
 - Formato: `yuva420p`

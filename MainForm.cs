@@ -6,7 +6,7 @@ internal sealed class MainForm : Form
 {
     private readonly TextBox _input = new();
     private readonly TextBox _output = new();
-    private readonly NumericUpDown _similarity = Number(0.001m, 0.5m, 0.023m, 0.001m, 3);
+    private readonly NumericUpDown _similarity = Number(0.001m, 0.5m, 0.260m, 0.001m, 3);
     private readonly NumericUpDown _blend = Number(0, 0.3m, 0.30m, 0.01m);
     private readonly NumericUpDown _zoom = new()
     {
@@ -31,6 +31,7 @@ internal sealed class MainForm : Form
     private readonly Label _status = new() { Text = "Selecione um MP4 para começar.", AutoSize = true, ForeColor = Theme.Muted };
     private readonly TokenProgressBar _progress = new() { Dock = DockStyle.Fill };
     private readonly Button _render = new() { Text = "GERAR WEBM", Tag = "primary" };
+    private readonly Button _clear = new() { Text = "LIMPAR / PRÓXIMO" };
     private readonly Button _cancel = new() { Text = "CANCELAR", Enabled = false };
     private readonly TrackBar _timeline = new()
     {
@@ -43,7 +44,7 @@ internal sealed class MainForm : Form
     private readonly Label _previewTime = new()
     {
         Text = "00:00.000 / 00:00.000", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight,
-        ForeColor = Theme.Muted, Font = new Font("Segoe UI Semibold", 8.5f)
+        ForeColor = Theme.Muted, Font = new Font("Segoe UI Semibold", 8f)
     };
     private readonly System.Windows.Forms.Timer _previewDebounce = new() { Interval = 280 };
     private AnalysisResult? _analysis;
@@ -66,12 +67,14 @@ internal sealed class MainForm : Form
         BuildUi();
         Theme.Apply(this);
         _quality.Items.AddRange(Enum.GetNames<QualityPreset>());
-        _quality.SelectedItem = QualityPreset.Equilibrada.ToString();
+        LoadSettings();
         _similarity.ValueChanged += (_, _) => SettingChanged();
         _blend.ValueChanged += (_, _) => SettingChanged();
         _zoom.ValueChanged += (_, _) => SettingChanged();
         _positionX.ValueChanged += (_, _) => SettingChanged();
         _positionY.ValueChanged += (_, _) => SettingChanged();
+        _quality.SelectedIndexChanged += (_, _) => SaveSettings();
+        _keepAudio.CheckedChanged += (_, _) => SaveSettings();
         _previewDebounce.Tick += async (_, _) =>
         {
             _previewDebounce.Stop();
@@ -87,8 +90,10 @@ internal sealed class MainForm : Form
         _play.Click += async (_, _) => await StartPlaybackAsync();
         _pause.Click += (_, _) => PausePlayback();
         _stop.Click += async (_, _) => await StopPlaybackAsync();
+        _clear.Click += (_, _) => ResetVideoState(true);
         FormClosed += (_, _) =>
         {
+            SaveSettings();
             _previewDebounce.Stop();
             _playbackCts?.Cancel();
             _previewCts?.Cancel();
@@ -187,31 +192,47 @@ internal sealed class MainForm : Form
         previewCard.Controls.Add(new Label { Text = "PRÉ-VISUALIZAÇÃO TRANSPARENTE", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI Semibold", 8.5f) }, 0, 0);
         previewCard.Controls.Add(_preview, 0, 1);
 
-        var playback = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 2, Tag = "surface", Margin = new Padding(0, 6, 0, 0) };
+        var playbackHost = new Panel { Dock = DockStyle.Fill, Tag = "surface", Margin = new Padding(0, 6, 0, 0) };
+        var playback = new TableLayoutPanel { RowCount = 2, ColumnCount = 2, Tag = "surface", Margin = Padding.Empty };
         playback.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         playback.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         playback.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        playback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+        playback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         _timeline.Margin = new Padding(0, 2, 8, 0); playback.Controls.Add(_timeline, 0, 0);
         playback.Controls.Add(_previewTime, 1, 0);
-        var playbackButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, Tag = "surface", WrapContents = false, FlowDirection = FlowDirection.LeftToRight, Padding = Padding.Empty };
+        var buttonCenter = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Tag = "surface", Margin = Padding.Empty };
+        buttonCenter.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        buttonCenter.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 312));
+        buttonCenter.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        var playbackButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, Tag = "surface", WrapContents = false, FlowDirection = FlowDirection.LeftToRight, Padding = Padding.Empty, Margin = Padding.Empty };
         foreach (var button in new[] { _play, _pause, _stop })
         {
             button.Width = 96; button.Height = 34; button.Margin = new Padding(0, 2, 8, 0);
             playbackButtons.Controls.Add(button);
         }
-        playback.Controls.Add(playbackButtons, 0, 1); playback.SetColumnSpan(playbackButtons, 2);
-        previewCard.Controls.Add(playback, 0, 2);
+        buttonCenter.Controls.Add(playbackButtons, 1, 0);
+        playback.Controls.Add(buttonCenter, 0, 1); playback.SetColumnSpan(buttonCenter, 2);
+        playbackHost.Controls.Add(playback);
+        void CenterPlayback()
+        {
+            var width = Math.Max(360, Math.Min(500, Math.Min(_preview.ClientSize.Width, _preview.ClientSize.Height)));
+            playback.Size = new Size(Math.Min(width, playbackHost.ClientSize.Width), 76);
+            playback.Location = new Point(Math.Max(0, (playbackHost.ClientSize.Width - playback.Width) / 2), 0);
+        }
+        playbackHost.SizeChanged += (_, _) => CenterPlayback();
+        _preview.SizeChanged += (_, _) => CenterPlayback();
+        previewCard.Controls.Add(playbackHost, 0, 2);
         content.Controls.Add(previewCard, 1, 0);
 
-        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 2, Padding = new Padding(28, 10, 28, 16), Tag = "background" };
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 2, Padding = new Padding(28, 10, 28, 16), Tag = "background" };
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 174)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 136)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
         footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 12));
         _render.Dock = DockStyle.Fill; _render.Margin = new Padding(0, 2, 12, 2); _render.Click += async (_, _) => await RenderAsync(); footer.Controls.Add(_render, 0, 0);
-        _cancel.Dock = DockStyle.Fill; _cancel.Margin = new Padding(0, 2, 12, 2); _cancel.Click += (_, _) => _cts?.Cancel(); footer.Controls.Add(_cancel, 1, 0);
-        _status.Dock = DockStyle.Fill; _status.TextAlign = ContentAlignment.MiddleLeft; footer.Controls.Add(_status, 2, 0);
-        footer.Controls.Add(new Label { Text = "ORIGINAL PRESERVADO", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Theme.Muted, Font = new Font("Segoe UI Semibold", 8) }, 3, 0);
-        footer.Controls.Add(_progress, 0, 1); footer.SetColumnSpan(_progress, 4); root.Controls.Add(footer, 0, 2);
+        _clear.Dock = DockStyle.Fill; _clear.Margin = new Padding(0, 2, 12, 2); footer.Controls.Add(_clear, 1, 0);
+        _cancel.Dock = DockStyle.Fill; _cancel.Margin = new Padding(0, 2, 12, 2); _cancel.Click += (_, _) => _cts?.Cancel(); footer.Controls.Add(_cancel, 2, 0);
+        _status.Dock = DockStyle.Fill; _status.TextAlign = ContentAlignment.MiddleLeft; footer.Controls.Add(_status, 3, 0);
+        footer.Controls.Add(new Label { Text = "ORIGINAL PRESERVADO", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Theme.Muted, Font = new Font("Segoe UI Semibold", 8) }, 4, 0);
+        footer.Controls.Add(_progress, 0, 1); footer.SetColumnSpan(_progress, 5); root.Controls.Add(footer, 0, 2);
     }
 
     private Control FileRow(string label, TextBox box, bool save)
@@ -233,6 +254,7 @@ internal sealed class MainForm : Form
             {
                 using var dialog = new OpenFileDialog { Filter = "Vídeos MP4|*.mp4|Vídeos|*.mp4;*.mov;*.mkv;*.webm" };
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                ResetVideoState(false);
                 _input.Text = dialog.FileName;
                 var suggested = Path.Combine(Path.GetDirectoryName(dialog.FileName)!, Path.GetFileNameWithoutExtension(dialog.FileName) + "_TOKEN.webm");
                 _output.Text = GetAvailableOutputPath(suggested);
@@ -269,7 +291,7 @@ internal sealed class MainForm : Form
             _preview.PreviewImage = LoadImage(_analysis.PreviewPath);
             try { File.Delete(_analysis.PreviewPath); } catch { }
             ConfigureTimeline();
-            SetPreviewPosition(Math.Min(_analysis.Video.Duration / 2, 5));
+            SetPreviewPosition(0);
             SetPlaybackControlsEnabled(true);
             _status.Text = $"Prévia pronta • Zoom {_zoom.Value:0}% • X {_positionX.Value:+0;-0;0} • Y {_positionY.Value:+0;-0;0}";
         }
@@ -291,7 +313,7 @@ internal sealed class MainForm : Form
         _cts = new CancellationTokenSource(); SetBusy(true);
         try
         {
-            var preset = Enum.Parse<QualityPreset>(_quality.SelectedItem?.ToString() ?? QualityPreset.Equilibrada.ToString());
+            var preset = Enum.Parse<QualityPreset>(_quality.SelectedItem?.ToString() ?? QualityPreset.Alta.ToString());
             var progress = new Progress<RenderProgress>(item => { _progress.Value = (int)item.Percent; _status.Text = item.Message; });
             await new WebmRenderer().RenderAsync(_input.Text, _output.Text, _analysis,
                 (double)_similarity.Value, (double)_blend.Value, (double)_zoom.Value,
@@ -314,7 +336,7 @@ internal sealed class MainForm : Form
 
     private void SetBusy(bool busy)
     {
-        _render.Enabled = !busy; _cancel.Enabled = busy;
+        _render.Enabled = !busy; _clear.Enabled = !busy; _cancel.Enabled = busy;
         _similarity.Enabled = !busy; _blend.Enabled = !busy; _zoom.Enabled = !busy;
         _positionX.Enabled = !busy; _positionY.Enabled = !busy;
         _timeline.Enabled = !busy && _analysis is not null;
@@ -335,8 +357,60 @@ internal sealed class MainForm : Form
 
     private void SettingChanged()
     {
+        SaveSettings();
         PausePlayback();
         SchedulePreviewRefresh();
+    }
+
+    private void ResetVideoState(bool clearPaths)
+    {
+        PausePlayback();
+        _previewDebounce.Stop();
+        _previewCts?.Cancel();
+        _analysis = null;
+        _previewPositionSeconds = 0;
+        _preview.PreviewImage = null;
+        _colorSwatch.BackColor = Theme.Field;
+        _detected.Text = "";
+        _timeline.Value = 0;
+        _timeline.Maximum = 1_000;
+        _progress.Value = 0;
+        if (clearPaths)
+        {
+            _input.Clear();
+            _output.Clear();
+        }
+        UpdatePreviewTime();
+        SetPlaybackControlsEnabled(false);
+        _status.Text = "Pronto para o próximo vídeo. Seus ajustes foram mantidos.";
+    }
+
+    private void LoadSettings()
+    {
+        var settings = AppSettings.Load();
+        _similarity.Value = Clamp(settings.Similarity, _similarity.Minimum, _similarity.Maximum);
+        _blend.Value = Clamp(settings.Blend, _blend.Minimum, _blend.Maximum);
+        _zoom.Value = Clamp(settings.Zoom, _zoom.Minimum, _zoom.Maximum);
+        _positionX.Value = Clamp(settings.PositionX, _positionX.Minimum, _positionX.Maximum);
+        _positionY.Value = Clamp(settings.PositionY, _positionY.Minimum, _positionY.Maximum);
+        _quality.SelectedItem = Enum.TryParse<QualityPreset>(settings.Quality, out var quality)
+            ? quality.ToString()
+            : QualityPreset.Alta.ToString();
+        _keepAudio.Checked = settings.KeepAudio;
+    }
+
+    private void SaveSettings()
+    {
+        new AppSettings
+        {
+            Similarity = _similarity.Value,
+            Blend = _blend.Value,
+            Zoom = _zoom.Value,
+            PositionX = _positionX.Value,
+            PositionY = _positionY.Value,
+            Quality = _quality.SelectedItem?.ToString() ?? QualityPreset.Alta.ToString(),
+            KeepAudio = _keepAudio.Checked
+        }.Save();
     }
 
     private async Task RefreshPreviewAsync()
@@ -548,4 +622,7 @@ internal sealed class MainForm : Form
 
     private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal increment, int decimalPlaces = 2) =>
         new() { Minimum = min, Maximum = max, Value = value, Increment = increment, DecimalPlaces = decimalPlaces, TextAlign = HorizontalAlignment.Center };
+
+    private static decimal Clamp(decimal value, decimal minimum, decimal maximum) =>
+        Math.Min(maximum, Math.Max(minimum, value));
 }

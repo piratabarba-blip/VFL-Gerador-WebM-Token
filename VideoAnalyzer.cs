@@ -45,7 +45,7 @@ internal sealed class VideoAnalyzer
             progress.Report($"Fundo detectado: #{background.R:X2}{background.G:X2}{background.B:X2}");
             var bounds = DetectSubjectBounds(frames, background, info.Width, info.Height);
 
-            var previewSecond = Math.Min(info.Duration / 2, 5);
+            var previewSecond = 0d;
             var preview = await CreatePreviewAsync(videoPath, background, bounds, info, similarity, blend,
                 zoomPercent, horizontalOffset, verticalOffset, previewSecond, cancellationToken);
             return new AnalysisResult(background, bounds, info, preview, confidence);
