@@ -9,6 +9,10 @@
     <RootNamespace>VFL.GeradorWebMToken</RootNamespace>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
     <Version>1.0.0</Version>
+    <AssemblyTitle>VFL Gerador WebM Token</AssemblyTitle>
+    <Product>VFL Gerador WebM Token</Product>
+    <Company>VFL</Company>
+    <Copyright>Copyright © 2026 VFL</Copyright>
     <Authors>VFL</Authors>
     <Description>Converte vídeos com fundo sólido em tokens WebM VP9 transparentes para Foundry VTT.</Description>
   </PropertyGroup>
