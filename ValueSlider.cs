@@ -52,7 +52,8 @@ internal sealed class ValueSlider : Control
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                  ControlStyles.ResizeRedraw | ControlStyles.UserPaint | ControlStyles.Selectable |
-                 ControlStyles.SupportsTransparentBackColor, true);
+                 ControlStyles.SupportsTransparentBackColor | ControlStyles.StandardClick |
+                 ControlStyles.StandardDoubleClick, true);
         Height = 30;
         Cursor = Cursors.Hand;
         TabStop = true;

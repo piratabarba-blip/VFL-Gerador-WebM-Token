@@ -9,6 +9,7 @@ internal sealed class AppSettings
     public decimal Zoom { get; set; } = 100m;
     public decimal PositionX { get; set; }
     public decimal PositionY { get; set; }
+    public decimal Rotation { get; set; }
     public string Quality { get; set; } = QualityPreset.Alta.ToString();
     public bool KeepAudio { get; set; } = true;
 

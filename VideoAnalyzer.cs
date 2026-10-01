@@ -20,7 +20,7 @@ internal sealed class VideoAnalyzer
     }
 
     public async Task<AnalysisResult> AnalyzeAsync(string videoPath, double similarity, double blend, double zoomPercent,
-        int horizontalOffset, int verticalOffset,
+        int horizontalOffset, int verticalOffset, double rotationDegrees,
         IProgress<string> progress, CancellationToken cancellationToken)
     {
         var info = await ProbeAsync(videoPath, cancellationToken);
@@ -47,7 +47,7 @@ internal sealed class VideoAnalyzer
 
             var previewSecond = 0d;
             var preview = await CreatePreviewAsync(videoPath, background, bounds, info, similarity, blend,
-                zoomPercent, horizontalOffset, verticalOffset, previewSecond, cancellationToken);
+                zoomPercent, horizontalOffset, verticalOffset, rotationDegrees, previewSecond, cancellationToken);
             return new AnalysisResult(background, bounds, info, preview, confidence);
         }
         finally
@@ -57,13 +57,14 @@ internal sealed class VideoAnalyzer
     }
 
     public Task<string> CreatePreviewAsync(string videoPath, AnalysisResult analysis, double similarity,
-        double blend, double zoomPercent, int horizontalOffset, int verticalOffset,
+        double blend, double zoomPercent, int horizontalOffset, int verticalOffset, double rotationDegrees,
         double positionSeconds, CancellationToken cancellationToken) =>
         CreatePreviewAsync(videoPath, analysis.BackgroundColor, analysis.SubjectBounds, analysis.Video,
-            similarity, blend, zoomPercent, horizontalOffset, verticalOffset, positionSeconds, cancellationToken);
+            similarity, blend, zoomPercent, horizontalOffset, verticalOffset, rotationDegrees,
+            positionSeconds, cancellationToken);
 
     public async Task StreamPreviewAsync(string videoPath, AnalysisResult analysis, double similarity,
-        double blend, double zoomPercent, int horizontalOffset, int verticalOffset,
+        double blend, double zoomPercent, int horizontalOffset, int verticalOffset, double rotationDegrees,
         double positionSeconds, Func<Bitmap, double, Task> showFrame, CancellationToken cancellationToken)
     {
         const int previewSize = 500;
@@ -71,7 +72,7 @@ internal sealed class VideoAnalyzer
         var finalFrameSecond = Math.Max(0, analysis.Video.Duration - 1 / Math.Max(1, analysis.Video.FrameRate));
         var seekSecond = Math.Clamp(positionSeconds, 0, finalFrameSecond);
         var filter = BuildVideoFilter(analysis.BackgroundColor, analysis.SubjectBounds, similarity, blend,
-            zoomPercent, horizontalOffset, verticalOffset) +
+            zoomPercent, horizontalOffset, verticalOffset, rotationDegrees) +
             $",scale={previewSize}:{previewSize}:flags=fast_bilinear,fps={previewFps.ToString(CultureInfo.InvariantCulture)},format=bgra";
         var psi = new ProcessStartInfo(_ffmpeg)
         {
@@ -123,11 +124,11 @@ internal sealed class VideoAnalyzer
 
     private async Task<string> CreatePreviewAsync(string videoPath, Color background, Rectangle bounds,
         VideoInfo info, double similarity, double blend, double zoomPercent, int horizontalOffset,
-        int verticalOffset, double positionSeconds, CancellationToken cancellationToken)
+        int verticalOffset, double rotationDegrees, double positionSeconds, CancellationToken cancellationToken)
     {
         var preview = Path.Combine(Path.GetTempPath(), "VFL-WebM-preview-" + Guid.NewGuid().ToString("N") + ".png");
         var filter = BuildVideoFilter(background, bounds, similarity, blend, zoomPercent,
-            horizontalOffset, verticalOffset);
+            horizontalOffset, verticalOffset, rotationDegrees);
         try
         {
             var finalFrameSecond = Math.Max(0, info.Duration - 1 / Math.Max(1, info.FrameRate));
@@ -145,7 +146,8 @@ internal sealed class VideoAnalyzer
     }
 
     public static string BuildVideoFilter(Color color, Rectangle bounds, double similarity, double blend,
-        double zoomPercent = 100, int horizontalOffset = 0, int verticalOffset = 0)
+        double zoomPercent = 100, int horizontalOffset = 0, int verticalOffset = 0,
+        double rotationDegrees = 0)
     {
         var ci = CultureInfo.InvariantCulture;
         var key = $"0x{color.R:X2}{color.G:X2}{color.B:X2}";
@@ -155,27 +157,34 @@ internal sealed class VideoAnalyzer
         var scaledWidth = wide ? targetSize : Even((int)Math.Round(bounds.Width * targetSize / (double)bounds.Height));
         var scaledHeight = wide ? Even((int)Math.Round(bounds.Height * targetSize / (double)bounds.Width)) : targetSize;
         var scale = wide ? $"scale={scaledWidth}:-2" : $"scale=-2:{scaledHeight}";
-        var canvasWidth = Math.Max(1080, scaledWidth);
-        var canvasHeight = Math.Max(1080, scaledHeight);
+        var rotation = Math.Clamp(rotationDegrees, -180, 180);
+        var radians = rotation * Math.PI / 180d;
+        var cosine = Math.Abs(Math.Cos(radians));
+        var sine = Math.Abs(Math.Sin(radians));
+        var rotatedWidth = Even((int)Math.Ceiling(scaledWidth * cosine + scaledHeight * sine));
+        var rotatedHeight = Even((int)Math.Ceiling(scaledWidth * sine + scaledHeight * cosine));
+        var canvasWidth = Math.Max(1080, rotatedWidth);
+        var canvasHeight = Math.Max(1080, rotatedHeight);
         var offsetX = Math.Clamp(horizontalOffset, -400, 400);
         // Valores positivos acompanham a seta para cima do controle e movem o personagem para cima.
         var offsetY = Math.Clamp(-verticalOffset, -400, 400);
-        var padX = scaledWidth <= 1080
-            ? Math.Clamp((1080 - scaledWidth) / 2 + offsetX, 0, 1080 - scaledWidth)
+        var padX = rotatedWidth <= 1080
+            ? Math.Clamp((1080 - rotatedWidth) / 2 + offsetX, 0, 1080 - rotatedWidth)
             : 0;
-        var padY = scaledHeight <= 1080
-            ? Math.Clamp((1080 - scaledHeight) / 2 + offsetY, 0, 1080 - scaledHeight)
+        var padY = rotatedHeight <= 1080
+            ? Math.Clamp((1080 - rotatedHeight) / 2 + offsetY, 0, 1080 - rotatedHeight)
             : 0;
-        var cropX = scaledWidth > 1080
-            ? Math.Clamp((scaledWidth - 1080) / 2 - offsetX, 0, scaledWidth - 1080)
+        var cropX = rotatedWidth > 1080
+            ? Math.Clamp((rotatedWidth - 1080) / 2 - offsetX, 0, rotatedWidth - 1080)
             : 0;
-        var cropY = scaledHeight > 1080
-            ? Math.Clamp((scaledHeight - 1080) / 2 - offsetY, 0, scaledHeight - 1080)
+        var cropY = rotatedHeight > 1080
+            ? Math.Clamp((rotatedHeight - 1080) / 2 - offsetY, 0, rotatedHeight - 1080)
             : 0;
         return $"format=rgba,colorkey={key}:{similarity.ToString("0.###", ci)}:{blend.ToString("0.###", ci)}," +
                "lut=a='if(lt(val,64),0,if(gt(val,128),255,(val-64)*255/64))'," +
                $"crop={bounds.Width}:{bounds.Height}:{bounds.X}:{bounds.Y}," +
                scale + "," +
+               $"rotate={radians.ToString("0.########", ci)}:ow={rotatedWidth}:oh={rotatedHeight}:c=none," +
                $"pad={canvasWidth}:{canvasHeight}:{padX}:{padY}:color=black@0," +
                $"crop=1080:1080:{cropX}:{cropY},format=yuva420p";
     }

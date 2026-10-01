@@ -14,7 +14,8 @@ Aplicativo Windows para transformar vídeos com fundo sólido — verde, azul ou
 - Preferências salvas automaticamente entre vídeos e ao fechar o programa.
 - Miniatura PNG automática com o mesmo enquadramento e quadriculado da prévia.
 - Remoção de fundo com máscara alfa reforçada.
-- Zoom e posicionamento horizontal/vertical com atualização automática.
+- Zoom, posicionamento horizontal/vertical e rotação de `-180°` a `+180°` com atualização automática.
+- Duplo clique no slider de rotação para retornar imediatamente a `0°`.
 - Saída fixa em 1080×1080, 24 FPS, VP9 com alfa.
 - FFmpeg 8.1 e FFprobe portáteis incluídos no pacote para Windows.
 - Preset **Alpha VP9** confirmado para uso no Foundry VTT.
@@ -32,7 +33,7 @@ Windows 10 ou 11 de 64 bits. O pacote da seção **Releases** já inclui o FFmpe
 1. Baixe o ZIP na seção **Releases** e extraia a pasta inteira.
 2. Abra `VFL.GeradorWebMToken.exe`.
 3. Selecione o vídeo com fundo sólido.
-4. Confira a prévia e ajuste zoom, posições X/Y, tolerância ou suavização se necessário.
+4. Confira a prévia e ajuste zoom, posições X/Y, rotação, tolerância ou suavização se necessário.
 5. Clique em **Gerar WebM**.
 6. Importe o novo arquivo `_TOKEN.webm` no Foundry.
 
@@ -42,6 +43,7 @@ Reprodutores comuns podem mostrar o fundo verde porque não interpretam alfa em 
 
 - Tolerância: `0,260`
 - Suavização: `0,30`
+- Rotação: `0°`
 - Qualidade: Alta (`CRF 5`)
 - Bitrate: `20M`
 - GOP: `15`

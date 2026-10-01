@@ -10,7 +10,7 @@ internal sealed class WebmRenderer
         "FFmpeg portátil não encontrado. Extraia novamente a pasta completa do programa.");
 
     public async Task RenderAsync(string input, string output, AnalysisResult analysis, double similarity,
-        double blend, double zoomPercent, int horizontalOffset, int verticalOffset,
+        double blend, double zoomPercent, int horizontalOffset, int verticalOffset, double rotationDegrees,
         QualityPreset quality, bool keepAudio,
         IProgress<RenderProgress> progress, CancellationToken cancellationToken)
     {
@@ -21,7 +21,7 @@ internal sealed class WebmRenderer
             $".{Path.GetFileNameWithoutExtension(output)}-{Guid.NewGuid():N}.rendering.webm");
         var crf = quality switch { QualityPreset.Leve => 30, QualityPreset.Alta => 5, _ => 15 };
         var filter = VideoAnalyzer.BuildVideoFilter(analysis.BackgroundColor, analysis.SubjectBounds,
-            similarity, blend, zoomPercent, horizontalOffset, verticalOffset);
+            similarity, blend, zoomPercent, horizontalOffset, verticalOffset, rotationDegrees);
         var args = new List<string>
         {
             "-y", "-hide_banner", "-progress", "pipe:1", "-nostats", "-i", input,

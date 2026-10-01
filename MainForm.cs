@@ -11,6 +11,7 @@ internal sealed class MainForm : Form
     private readonly ValueSlider _zoom = Slider(50, 180, 100, 5, 0);
     private readonly ValueSlider _positionX = Slider(-400, 400, 0, 10, 0);
     private readonly ValueSlider _positionY = Slider(-400, 400, 0, 10, 0);
+    private readonly ValueSlider _rotation = Slider(-180, 180, 0, 1, 0);
     private readonly ComboBox _quality = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly CheckBox _keepAudio = new() { Text = "Manter áudio quando existir", Checked = true, AutoSize = true };
     private readonly CheckerPreview _preview = new() { Dock = DockStyle.Fill };
@@ -66,6 +67,8 @@ internal sealed class MainForm : Form
         _zoom.ValueChanged += (_, _) => SettingChanged();
         _positionX.ValueChanged += (_, _) => SettingChanged();
         _positionY.ValueChanged += (_, _) => SettingChanged();
+        _rotation.ValueChanged += (_, _) => SettingChanged();
+        _rotation.DoubleClick += (_, _) => _rotation.Value = 0;
         _quality.SelectedIndexChanged += (_, _) => SaveSettings();
         _keepAudio.CheckedChanged += (_, _) => SaveSettings();
         _selectVideo.Click += async (_, _) => await SelectVideoAsync();
@@ -136,10 +139,10 @@ internal sealed class MainForm : Form
         main.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 310));
         root.Controls.Add(main, 0, 1);
 
-        var left = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 10, Padding = new Padding(16, 14, 16, 14), Tag = "sidebar", Margin = Padding.Empty, AutoScroll = true, AutoScrollMinSize = new Size(0, 620) };
+        var left = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 10, Padding = new Padding(16, 14, 16, 14), Tag = "sidebar", Margin = Padding.Empty, AutoScroll = true, AutoScrollMinSize = new Size(0, 660) };
         left.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); left.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); left.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-        for (var index = 0; index < 5; index++) left.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
-        left.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); left.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        for (var index = 0; index < 6; index++) left.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
+        left.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         left.Controls.Add(SectionTitle("CHROMA E ENQUADRAMENTO", "◆"), 0, 0);
         left.Controls.Add(new Label { Text = "Ajuste a remoção do fundo e posicione o personagem dentro do quadro 1:1.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f) }, 0, 1);
         var detectedCard = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Tag = "card", Padding = new Padding(10, 7, 10, 7), Margin = Padding.Empty };
@@ -152,7 +155,8 @@ internal sealed class MainForm : Form
         left.Controls.Add(StackedNumber("ZOOM", _zoom, "50% afasta  •  180% aproxima"), 0, 5);
         left.Controls.Add(StackedNumber("POSIÇÃO X", _positionX, "− esquerda  •  + direita"), 0, 6);
         left.Controls.Add(StackedNumber("POSIÇÃO Y", _positionY, "+ cima  •  − baixo"), 0, 7);
-        left.Controls.Add(new Label { Text = "REFERÊNCIA FIXA\nA área quadriculada representa exatamente o WebM 1080×1080.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f), Padding = new Padding(10), Tag = "card" }, 0, 8);
+        left.Controls.Add(StackedNumber("ROTAÇÃO", _rotation, "− anti-horário  •  + horário  •  duplo clique zera"), 0, 8);
+        left.Controls.Add(new Label { Text = "REFERÊNCIA FIXA\nA área quadriculada representa exatamente o WebM 1080×1080.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f), Padding = new Padding(10), Tag = "card" }, 0, 9);
         main.Controls.Add(left, 0, 0);
 
         var workspace = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Tag = "background", Margin = Padding.Empty };
@@ -316,7 +320,7 @@ internal sealed class MainForm : Form
 
         var settings = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, RowCount = 12, Padding = new Padding(22, 16, 22, 16),
+            Dock = DockStyle.Fill, RowCount = 13, Padding = new Padding(22, 16, 22, 16),
             Tag = "rounded-surface", Margin = new Padding(0, 0, 12, 0),
             AutoScroll = true, AutoScrollMinSize = new Size(0, 540)
         };
@@ -324,6 +328,7 @@ internal sealed class MainForm : Form
         settings.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
         settings.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
         settings.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        settings.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         settings.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         settings.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         settings.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
@@ -345,13 +350,14 @@ internal sealed class MainForm : Form
         settings.Controls.Add(SettingRow("Zoom", _zoom, "50% afasta  •  180% aproxima"), 0, 6);
         settings.Controls.Add(SettingRow("Posição X", _positionX, "− esquerda  •  + direita"), 0, 7);
         settings.Controls.Add(SettingRow("Posição Y", _positionY, "+ cima  •  − baixo"), 0, 8);
+        settings.Controls.Add(SettingRow("Rotação", _rotation, "− anti-horário  •  + horário"), 0, 9);
         var qualityRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Tag = "surface" };
         qualityRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); qualityRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         qualityRow.Controls.Add(new Label { Text = "QUALIDADE", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         _quality.Dock = DockStyle.Fill; _quality.Margin = new Padding(0, 7, 0, 7); qualityRow.Controls.Add(_quality, 1, 0);
-        settings.Controls.Add(qualityRow, 0, 9);
-        _keepAudio.Dock = DockStyle.Fill; settings.Controls.Add(_keepAudio, 0, 10);
-        settings.Controls.Add(new Label { Text = "Prévia automática • Saída 1080×1080 • 24 FPS • VP9 transparente\nZoom 100% e posições X/Y 0 mantêm o enquadramento automático.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.5f) }, 0, 11);
+        settings.Controls.Add(qualityRow, 0, 10);
+        _keepAudio.Dock = DockStyle.Fill; settings.Controls.Add(_keepAudio, 0, 11);
+        settings.Controls.Add(new Label { Text = "Prévia automática • Saída 1080×1080 • 24 FPS • VP9 transparente\nZoom 100%, posições X/Y 0 e rotação 0° mantêm o enquadramento automático.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.5f) }, 0, 12);
         content.Controls.Add(settings, 0, 0);
 
         var previewCard = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Padding = new Padding(16), Tag = "rounded-surface", Margin = new Padding(12, 0, 0, 0) };
@@ -454,7 +460,7 @@ internal sealed class MainForm : Form
             var analyzer = new VideoAnalyzer();
             var messages = new Progress<string>(message => _status.Text = message);
             _analysis = await analyzer.AnalyzeAsync(_input.Text, (double)_similarity.Value, (double)_blend.Value,
-                (double)_zoom.Value, (int)_positionX.Value, (int)_positionY.Value, messages, _cts.Token);
+                (double)_zoom.Value, (int)_positionX.Value, (int)_positionY.Value, (double)_rotation.Value, messages, _cts.Token);
             _colorSwatch.BackColor = _analysis.BackgroundColor;
             _detected.Text = $"#{_analysis.BackgroundColor.R:X2}{_analysis.BackgroundColor.G:X2}{_analysis.BackgroundColor.B:X2}  •  confiança {_analysis.Confidence:P0}";
             _preview.PreviewImage = LoadImage(_analysis.PreviewPath);
@@ -464,7 +470,7 @@ internal sealed class MainForm : Form
             SetPlaybackControlsEnabled(true);
             _videoTitle.Text = Path.GetFileName(_input.Text);
             _videoMeta.Text = $"{FormatTime(_analysis.Video.Duration)}  •  fundo {_detected.Text}";
-            _status.Text = $"Prévia pronta • Zoom {_zoom.Value:0}% • X {_positionX.Value:+0;-0;0} • Y {_positionY.Value:+0;-0;0}";
+            _status.Text = $"Prévia pronta • Zoom {_zoom.Value:0}% • X {_positionX.Value:+0;-0;0} • Y {_positionY.Value:+0;-0;0} • Giro {_rotation.Value:+0;-0;0}°";
         }
         catch (OperationCanceledException) { _status.Text = "Análise cancelada."; _videoMeta.Text = "Análise cancelada"; }
         catch (Exception exception) { _status.Text = "Falha na análise."; _videoMeta.Text = "Não foi possível analisar este arquivo"; TokenDialog.ShowMessage(this, "Erro na análise", exception.Message); }
@@ -488,7 +494,7 @@ internal sealed class MainForm : Form
             var progress = new Progress<RenderProgress>(item => { _progress.Value = (int)item.Percent; _status.Text = item.Message; });
             await new WebmRenderer().RenderAsync(_input.Text, _output.Text, _analysis,
                 (double)_similarity.Value, (double)_blend.Value, (double)_zoom.Value,
-                (int)_positionX.Value, (int)_positionY.Value,
+                (int)_positionX.Value, (int)_positionY.Value, (double)_rotation.Value,
                 preset, _keepAudio.Checked, progress, _cts.Token);
             var thumbnailPath = Path.Combine(
                 Path.GetDirectoryName(Path.GetFullPath(_output.Text)) ?? "",
@@ -510,7 +516,7 @@ internal sealed class MainForm : Form
         _render.Enabled = !busy && _analysis is not null; _clear.Enabled = !busy; _cancel.Enabled = busy;
         _selectVideo.Enabled = !busy; _selectOutput.Enabled = !busy;
         _similarity.Enabled = !busy; _blend.Enabled = !busy; _zoom.Enabled = !busy;
-        _positionX.Enabled = !busy; _positionY.Enabled = !busy; _quality.Enabled = !busy; _keepAudio.Enabled = !busy;
+        _positionX.Enabled = !busy; _positionY.Enabled = !busy; _rotation.Enabled = !busy; _quality.Enabled = !busy; _keepAudio.Enabled = !busy;
         _timeline.Enabled = !busy && _analysis is not null;
         if (busy)
         {
@@ -568,6 +574,7 @@ internal sealed class MainForm : Form
         _zoom.Value = Clamp(settings.Zoom, _zoom.Minimum, _zoom.Maximum);
         _positionX.Value = Clamp(settings.PositionX, _positionX.Minimum, _positionX.Maximum);
         _positionY.Value = Clamp(settings.PositionY, _positionY.Minimum, _positionY.Maximum);
+        _rotation.Value = Clamp(settings.Rotation, _rotation.Minimum, _rotation.Maximum);
         _quality.SelectedItem = Enum.TryParse<QualityPreset>(settings.Quality, out var quality)
             ? quality.ToString()
             : QualityPreset.Alta.ToString();
@@ -583,6 +590,7 @@ internal sealed class MainForm : Form
             Zoom = _zoom.Value,
             PositionX = _positionX.Value,
             PositionY = _positionY.Value,
+            Rotation = _rotation.Value,
             Quality = _quality.SelectedItem?.ToString() ?? QualityPreset.Alta.ToString(),
             KeepAudio = _keepAudio.Checked
         }.Save();
@@ -602,10 +610,10 @@ internal sealed class MainForm : Form
             _status.Text = "Atualizando prévia...";
             previewPath = await new VideoAnalyzer().CreatePreviewAsync(_input.Text, _analysis,
                 (double)_similarity.Value, (double)_blend.Value, (double)_zoom.Value,
-                (int)_positionX.Value, (int)_positionY.Value, _previewPositionSeconds, token);
+                (int)_positionX.Value, (int)_positionY.Value, (double)_rotation.Value, _previewPositionSeconds, token);
             if (token.IsCancellationRequested) return;
             _preview.PreviewImage = LoadImage(previewPath);
-            _status.Text = $"Prévia {FormatTime(_previewPositionSeconds)} • Zoom {_zoom.Value:0}% • X {_positionX.Value:+0;-0;0} • Y {_positionY.Value:+0;-0;0}";
+            _status.Text = $"Prévia {FormatTime(_previewPositionSeconds)} • Zoom {_zoom.Value:0}% • X {_positionX.Value:+0;-0;0} • Y {_positionY.Value:+0;-0;0} • Giro {_rotation.Value:+0;-0;0}°";
         }
         catch (OperationCanceledException) { }
         catch (Exception exception)
@@ -648,7 +656,7 @@ internal sealed class MainForm : Form
         {
             await new VideoAnalyzer().StreamPreviewAsync(_input.Text, _analysis,
                 (double)_similarity.Value, (double)_blend.Value, (double)_zoom.Value,
-                (int)_positionX.Value, (int)_positionY.Value, startPosition,
+                (int)_positionX.Value, (int)_positionY.Value, (double)_rotation.Value, startPosition,
                 async (bitmap, seconds) =>
                 {
                     if (token.IsCancellationRequested) { bitmap.Dispose(); return; }
