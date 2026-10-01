@@ -112,7 +112,7 @@ internal sealed class MainForm : Form
         topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
         topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 350));
-        topbar.Controls.Add(CreateBrand("VFL Gerador WebM Token", "VP9 TRANSPARENTE 1:1  •  v2.1"), 0, 0);
+        topbar.Controls.Add(CreateBrand("VFL Gerador WebM Token", "VP9 TRANSPARENTE 1:1  •  v2.0"), 0, 0);
         _selectVideo.Dock = DockStyle.Fill; _selectVideo.Margin = new Padding(12, 5, 12, 5); topbar.Controls.Add(_selectVideo, 1, 0);
 
         var videoCard = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Tag = "card", Padding = new Padding(12, 4, 12, 4), Margin = new Padding(0, 2, 14, 2) };

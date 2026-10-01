@@ -2,7 +2,7 @@
 
 Aplicativo Windows para transformar vídeos com fundo sólido — verde, azul ou outra cor — em tokens **WebM VP9 com transparência**, prontos para uso no Foundry VTT.
 
-![Interface do VFL Gerador WebM Token](docs/interface-v2.1.png)
+![Interface do VFL Gerador WebM Token](docs/interface.png)
 
 ## Principais recursos
 
