@@ -45,16 +45,17 @@ internal static class Theme
                 check.BackColor = Color.Transparent; check.ForeColor = Text;
                 break;
             case Button button when button.Tag as string == "primary":
-                button.BackColor = Primary; button.ForeColor = Color.White; button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; Round(button, 6);
+                button.BackColor = Primary; button.ForeColor = Color.White; button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; Round(button, 10);
                 break;
             case Button button when button.Tag as string == "success":
-                button.BackColor = Success; button.ForeColor = Color.White; button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; Round(button, 6);
+                button.BackColor = Success; button.ForeColor = Color.White; button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; Round(button, 10);
                 break;
             case Button button:
-                button.BackColor = Button; button.ForeColor = Text; button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderColor = Border; Round(button, 6);
+                button.BackColor = Button; button.ForeColor = Text; button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderColor = Border; Round(button, 10);
                 break;
             case Label label:
                 if (label.Tag as string != "accent") label.BackColor = Color.Transparent;
+                if (label.Tag as string == "brand-badge") label.ForeColor = Primary;
                 break;
         }
         if (root.Tag as string == "rounded-surface" || root.Tag as string == "card") Round(root, 8);
