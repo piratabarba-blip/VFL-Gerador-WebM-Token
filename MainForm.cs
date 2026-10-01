@@ -102,7 +102,7 @@ internal sealed class MainForm : Form
     private void BuildProfessionalUi()
     {
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Tag = "background", Margin = Padding.Empty };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
         Controls.Add(root);
@@ -156,7 +156,7 @@ internal sealed class MainForm : Form
         main.Controls.Add(left, 0, 0);
 
         var workspace = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Tag = "background", Margin = Padding.Empty };
-        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); workspace.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
+        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); workspace.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
         var previewHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(20, 10, 20, 6), Tag = "background" };
         previewHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); previewHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
         previewHeader.Controls.Add(new Label { Text = "PRÉ-VISUALIZAÇÃO TRANSPARENTE", Dock = DockStyle.Fill, Font = new Font("Segoe UI Semibold", 10), TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
@@ -211,14 +211,22 @@ internal sealed class MainForm : Form
 
     private Control CreatePlaybackPanel()
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 2, Padding = new Padding(24, 6, 24, 8), Tag = "header", Margin = Padding.Empty };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
-        _timeline.Margin = new Padding(0, 3, 10, 0); panel.Controls.Add(_timeline, 0, 0); panel.Controls.Add(_previewTime, 1, 0);
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(18, 4, 18, 8), Tag = "header", Margin = Padding.Empty };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _timeline.Dock = DockStyle.Fill;
+        _timeline.Margin = new Padding(0, 2, 0, 0);
+        panel.Controls.Add(_timeline, 0, 0);
+        _previewTime.Dock = DockStyle.Fill;
+        _previewTime.TextAlign = ContentAlignment.MiddleRight;
+        _previewTime.Margin = Padding.Empty;
+        panel.Controls.Add(_previewTime, 0, 1);
         var controls = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Tag = "header", Margin = Padding.Empty };
         controls.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         foreach (var item in new[] { (_play, 1), (_pause, 2), (_stop, 3) }) { item.Item1.Dock = DockStyle.Fill; item.Item1.Margin = new Padding(4); controls.Controls.Add(item.Item1, item.Item2, 0); }
-        panel.Controls.Add(controls, 0, 1); panel.SetColumnSpan(controls, 2); return panel;
+        panel.Controls.Add(controls, 0, 2);
+        return panel;
     }
 
     private static Label SectionTitle(string text, string icon) => new()
