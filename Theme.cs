@@ -58,7 +58,9 @@ internal static class Theme
                 if (label.Tag as string == "brand-badge") label.ForeColor = Primary;
                 break;
         }
-        if (root.Tag as string == "rounded-surface" || root.Tag as string == "card") Round(root, 8);
+        if (root is TextBox or ComboBox or NumericUpDown) Round(root, 6);
+        else if (root.Tag as string == "rounded-surface") Round(root, 14);
+        else if (root.Tag as string == "card") Round(root, 12);
         foreach (Control child in root.Controls) Apply(child);
     }
 
