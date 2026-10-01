@@ -2,11 +2,12 @@
 
 Aplicativo Windows para transformar vídeos com fundo sólido — verde, azul ou outra cor — em tokens **WebM VP9 com transparência**, prontos para uso no Foundry VTT.
 
-![Interface do VFL Gerador WebM Token](docs/interface-v1.0.png)
+![Interface do VFL Gerador WebM Token](docs/interface-v2.1.png)
 
 ## Principais recursos
 
 - Detecção automática da cor de fundo.
+- Interface profissional padronizada com a suíte VFL.
 - Pré-visualização transparente em referência fixa 1:1.
 - Linha do tempo com precisão de milissegundos e reprodução fluida a 24 FPS, com Play, Pausa e Stop.
 - Botão **Limpar / próximo** que prepara outro vídeo sem perder os ajustes.

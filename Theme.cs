@@ -4,15 +4,19 @@ namespace VFL.GeradorWebMToken;
 
 internal static class Theme
 {
-    public static readonly Color Background = Color.FromArgb(10, 13, 18);
-    public static readonly Color Header = Color.FromArgb(14, 18, 24);
-    public static readonly Color Surface = Color.FromArgb(25, 29, 37);
-    public static readonly Color Field = Color.FromArgb(34, 39, 49);
-    public static readonly Color Border = Color.FromArgb(61, 69, 84);
-    public static readonly Color Text = Color.FromArgb(218, 224, 234);
-    public static readonly Color Muted = Color.FromArgb(166, 177, 197);
-    public static readonly Color Primary = Color.FromArgb(237, 46, 71);
-    public static readonly Color Button = Color.FromArgb(43, 49, 62);
+    public static readonly Color Background = Color.FromArgb(14, 17, 23);
+    public static readonly Color Header = Color.FromArgb(21, 25, 34);
+    public static readonly Color Surface = Color.FromArgb(26, 32, 44);
+    public static readonly Color Card = Color.FromArgb(34, 41, 56);
+    public static readonly Color Field = Color.FromArgb(34, 41, 56);
+    public static readonly Color Border = Color.FromArgb(45, 55, 72);
+    public static readonly Color Text = Color.FromArgb(248, 250, 252);
+    public static readonly Color Muted = Color.FromArgb(148, 163, 184);
+    public static readonly Color Dim = Color.FromArgb(100, 116, 139);
+    public static readonly Color Primary = Color.FromArgb(6, 182, 212);
+    public static readonly Color Success = Color.FromArgb(16, 185, 129);
+    public static readonly Color AccentCyan = Color.FromArgb(34, 211, 238);
+    public static readonly Color Button = Color.FromArgb(34, 41, 56);
 
     public static void Apply(Control root)
     {
@@ -20,7 +24,8 @@ internal static class Theme
         {
             "background" => Background,
             "header" => Header,
-            "surface" or "rounded-surface" => Surface,
+            "surface" or "rounded-surface" or "sidebar" => Surface,
+            "card" => Card,
             "accent" => Primary,
             _ => root is Form ? Background : root is Panel ? Surface : Background
         };
@@ -40,7 +45,10 @@ internal static class Theme
                 check.BackColor = Color.Transparent; check.ForeColor = Text;
                 break;
             case Button button when button.Tag as string == "primary":
-                button.BackColor = Primary; button.ForeColor = Text; button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; Round(button, 6);
+                button.BackColor = Primary; button.ForeColor = Color.White; button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; Round(button, 6);
+                break;
+            case Button button when button.Tag as string == "success":
+                button.BackColor = Success; button.ForeColor = Color.White; button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; Round(button, 6);
                 break;
             case Button button:
                 button.BackColor = Button; button.ForeColor = Text; button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderColor = Border; Round(button, 6);
@@ -49,7 +57,7 @@ internal static class Theme
                 if (label.Tag as string != "accent") label.BackColor = Color.Transparent;
                 break;
         }
-        if (root.Tag as string == "rounded-surface") Round(root, 10);
+        if (root.Tag as string == "rounded-surface" || root.Tag as string == "card") Round(root, 8);
         foreach (Control child in root.Controls) Apply(child);
     }
 

@@ -33,14 +33,19 @@ internal sealed class MainForm : Form
     private readonly Button _render = new() { Text = "GERAR WEBM", Tag = "primary" };
     private readonly Button _clear = new() { Text = "LIMPAR / PRÓXIMO" };
     private readonly Button _cancel = new() { Text = "CANCELAR", Enabled = false };
+    private readonly Button _selectVideo = new() { Text = "SELECIONAR VÍDEO", Tag = "primary" };
+    private readonly Button _selectOutput = new() { Text = "..." };
+    private readonly Label _videoTitle = new() { Text = "Nenhum vídeo carregado", AutoEllipsis = true, ForeColor = Theme.AccentCyan };
+    private readonly Label _videoMeta = new() { Text = "Selecione um arquivo para começar", AutoEllipsis = true, ForeColor = Theme.Muted };
+    private readonly Label _outputFolder = new() { Text = "Destino automático", AutoEllipsis = true, ForeColor = Theme.Muted };
     private readonly TrackBar _timeline = new()
     {
         Minimum = 0, Maximum = 1_000, Value = 0, TickStyle = TickStyle.None,
         Dock = DockStyle.Fill, Enabled = false, SmallChange = 1, LargeChange = 100
     };
-    private readonly Button _play = new() { Text = "▶  PLAY", Enabled = false };
-    private readonly Button _pause = new() { Text = "Ⅱ  PAUSA", Enabled = false };
-    private readonly Button _stop = new() { Text = "■  STOP", Enabled = false };
+    private readonly Button _play = new() { Text = "PLAY", Enabled = false };
+    private readonly Button _pause = new() { Text = "PAUSA", Enabled = false };
+    private readonly Button _stop = new() { Text = "STOP", Enabled = false };
     private readonly Label _previewTime = new()
     {
         Text = "00:00.000 / 00:00.000", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight,
@@ -57,14 +62,14 @@ internal sealed class MainForm : Form
     public MainForm()
     {
         Text = "VFL Gerador WebM Token";
-        Size = new Size(1120, 860);
-        MinimumSize = new Size(1100, 780);
+        Size = new Size(1440, 860);
+        MinimumSize = new Size(1180, 720);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 10);
         AutoScaleMode = AutoScaleMode.Dpi;
         BackColor = Theme.Background;
         Theme.ApplyIcon(this);
-        BuildUi();
+        BuildProfessionalUi();
         Theme.Apply(this);
         _quality.Items.AddRange(Enum.GetNames<QualityPreset>());
         LoadSettings();
@@ -75,6 +80,10 @@ internal sealed class MainForm : Form
         _positionY.ValueChanged += (_, _) => SettingChanged();
         _quality.SelectedIndexChanged += (_, _) => SaveSettings();
         _keepAudio.CheckedChanged += (_, _) => SaveSettings();
+        _selectVideo.Click += async (_, _) => await SelectVideoAsync();
+        _selectOutput.Click += (_, _) => SelectOutput();
+        _render.Click += async (_, _) => await RenderAsync();
+        _cancel.Click += (_, _) => _cts?.Cancel();
         _previewDebounce.Tick += async (_, _) =>
         {
             _previewDebounce.Stop();
@@ -100,6 +109,168 @@ internal sealed class MainForm : Form
             _previewCts?.Dispose();
         };
         Shown += (_, _) => FitToScreen();
+    }
+
+    private void BuildProfessionalUi()
+    {
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Tag = "background", Margin = Padding.Empty };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        Controls.Add(root);
+
+        var topbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, Padding = new Padding(16, 10, 16, 9), Tag = "header", Margin = Padding.Empty };
+        topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300));
+        topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+        topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 350));
+        topbar.Controls.Add(CreateBrand("VFL Gerador WebM Token", "v2.1"), 0, 0);
+        _selectVideo.Dock = DockStyle.Fill; _selectVideo.Margin = new Padding(12, 5, 12, 5); topbar.Controls.Add(_selectVideo, 1, 0);
+
+        var videoCard = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Tag = "card", Padding = new Padding(12, 4, 12, 4), Margin = new Padding(0, 2, 14, 2) };
+        videoCard.RowStyles.Add(new RowStyle(SizeType.Percent, 54)); videoCard.RowStyles.Add(new RowStyle(SizeType.Percent, 46));
+        _videoTitle.Dock = DockStyle.Fill; _videoTitle.TextAlign = ContentAlignment.BottomLeft; _videoTitle.Font = new Font("Segoe UI Semibold", 9); _videoTitle.Margin = Padding.Empty;
+        _videoMeta.Dock = DockStyle.Fill; _videoMeta.TextAlign = ContentAlignment.TopLeft; _videoMeta.Font = new Font("Segoe UI", 7.8f); _videoMeta.Margin = Padding.Empty;
+        videoCard.Controls.Add(_videoTitle, 0, 0); videoCard.Controls.Add(_videoMeta, 0, 1); topbar.Controls.Add(videoCard, 2, 0);
+
+        var destination = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Tag = "header", Margin = Padding.Empty };
+        destination.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); destination.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
+        var destinationCard = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Tag = "card", Padding = new Padding(10, 4, 8, 4), Margin = new Padding(0, 2, 6, 2) };
+        destinationCard.RowStyles.Add(new RowStyle(SizeType.Percent, 45)); destinationCard.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        destinationCard.Controls.Add(new Label { Text = "SALVAR WEBM EM", Dock = DockStyle.Fill, ForeColor = Theme.Dim, Font = new Font("Segoe UI Semibold", 7), TextAlign = ContentAlignment.BottomLeft, Margin = Padding.Empty }, 0, 0);
+        _outputFolder.Dock = DockStyle.Fill; _outputFolder.Font = new Font("Consolas", 8); _outputFolder.Margin = Padding.Empty; destinationCard.Controls.Add(_outputFolder, 0, 1);
+        destination.Controls.Add(destinationCard, 0, 0); _selectOutput.Dock = DockStyle.Fill; _selectOutput.Margin = new Padding(0, 5, 0, 5); destination.Controls.Add(_selectOutput, 1, 0);
+        topbar.Controls.Add(destination, 3, 0); root.Controls.Add(topbar, 0, 0);
+
+        var main = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Tag = "background", Margin = Padding.Empty };
+        main.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 320));
+        main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        main.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 310));
+        root.Controls.Add(main, 0, 1);
+
+        var left = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 10, Padding = new Padding(16, 14, 16, 14), Tag = "sidebar", Margin = Padding.Empty, AutoScroll = true, AutoScrollMinSize = new Size(0, 620) };
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); left.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); left.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        for (var index = 0; index < 5; index++) left.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
+        left.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); left.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        left.Controls.Add(SectionTitle("CHROMA E ENQUADRAMENTO", "◆"), 0, 0);
+        left.Controls.Add(new Label { Text = "Ajuste a remoção do fundo e posicione o personagem dentro do quadro 1:1.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f) }, 0, 1);
+        var detectedCard = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Tag = "card", Padding = new Padding(10, 7, 10, 7), Margin = Padding.Empty };
+        detectedCard.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112)); detectedCard.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42)); detectedCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        detectedCard.Controls.Add(new Label { Text = "FUNDO DETECTADO", Dock = DockStyle.Fill, ForeColor = Theme.Dim, Font = new Font("Segoe UI Semibold", 7.3f), TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+        _colorSwatch.Dock = DockStyle.Fill; _colorSwatch.Margin = new Padding(4); detectedCard.Controls.Add(_colorSwatch, 1, 0);
+        _detected.Dock = DockStyle.Fill; _detected.TextAlign = ContentAlignment.MiddleLeft; _detected.Font = new Font("Consolas", 8); detectedCard.Controls.Add(_detected, 2, 0); left.Controls.Add(detectedCard, 0, 2);
+        left.Controls.Add(StackedNumber("TOLERÂNCIA", _similarity, "maior remove mais variações"), 0, 3);
+        left.Controls.Add(StackedNumber("SUAVIZAÇÃO", _blend, "suaviza cabelos e contornos"), 0, 4);
+        left.Controls.Add(StackedNumber("ZOOM", _zoom, "50% afasta  •  180% aproxima"), 0, 5);
+        left.Controls.Add(StackedNumber("POSIÇÃO X", _positionX, "− esquerda  •  + direita"), 0, 6);
+        left.Controls.Add(StackedNumber("POSIÇÃO Y", _positionY, "+ cima  •  − baixo"), 0, 7);
+        left.Controls.Add(new Label { Text = "REFERÊNCIA FIXA\nA área quadriculada representa exatamente o WebM 1080×1080.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f), Padding = new Padding(10), Tag = "card" }, 0, 8);
+        main.Controls.Add(left, 0, 0);
+
+        var workspace = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Tag = "background", Margin = Padding.Empty };
+        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); workspace.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
+        var previewHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(20, 10, 20, 6), Tag = "background" };
+        previewHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); previewHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+        previewHeader.Controls.Add(new Label { Text = "PRÉ-VISUALIZAÇÃO TRANSPARENTE", Dock = DockStyle.Fill, Font = new Font("Segoe UI Semibold", 10), TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+        previewHeader.Controls.Add(new Label { Text = "SAÍDA 1:1  •  VP9 ALPHA", Dock = DockStyle.Fill, ForeColor = Theme.AccentCyan, Font = new Font("Segoe UI Semibold", 8), TextAlign = ContentAlignment.MiddleRight }, 1, 0);
+        workspace.Controls.Add(previewHeader, 0, 0); _preview.Margin = new Padding(18, 0, 18, 6); workspace.Controls.Add(_preview, 0, 1);
+        workspace.Controls.Add(CreatePlaybackPanel(), 0, 2); main.Controls.Add(workspace, 1, 0);
+
+        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 7, Padding = new Padding(16, 14, 16, 14), Tag = "sidebar", Margin = Padding.Empty };
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 72)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 138)); right.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        right.Controls.Add(SectionTitle("EXPORTAÇÃO", "↗"), 0, 0);
+        right.Controls.Add(StackedCombo("QUALIDADE DO WEBM", _quality), 0, 1);
+        _keepAudio.Dock = DockStyle.Fill; _keepAudio.Padding = new Padding(8, 0, 0, 0); _keepAudio.Tag = "card"; right.Controls.Add(_keepAudio, 0, 2);
+        var specs = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5, Tag = "card", Padding = new Padding(12), Margin = new Padding(0, 8, 0, 8) };
+        foreach (var text in new[] { "1080 × 1080 pixels", "24 quadros por segundo", "WebM VP9 transparente", "Miniatura PNG automática", "Processamento 100% local" })
+            specs.Controls.Add(new Label { Text = "•  " + text, Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f), TextAlign = ContentAlignment.MiddleLeft });
+        right.Controls.Add(specs, 0, 3);
+        right.Controls.Add(new Label { Text = "O arquivo original permanece intacto.\n\nAlguns reprodutores mostram verde; o Foundry interpreta corretamente o canal alfa.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.4f), Padding = new Padding(4, 12, 4, 4) }, 0, 4);
+        _render.Dock = DockStyle.Fill; _render.Tag = "success"; _render.Margin = new Padding(0, 4, 0, 2); _render.Enabled = false; right.Controls.Add(_render, 0, 5);
+        _clear.Dock = DockStyle.Fill; _clear.Margin = new Padding(0, 6, 0, 0); right.Controls.Add(_clear, 0, 6); main.Controls.Add(right, 2, 0);
+
+        var statusbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 2, Padding = new Padding(16, 4, 16, 5), Tag = "header", Margin = Padding.Empty };
+        statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+        statusbar.RowStyles.Add(new RowStyle(SizeType.Absolute, 35)); statusbar.RowStyles.Add(new RowStyle(SizeType.Absolute, 5));
+        statusbar.Controls.Add(new Label { Text = "●  PROCESSAMENTO LOCAL", Dock = DockStyle.Fill, ForeColor = Theme.AccentCyan, TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Segoe UI Semibold", 7.5f) }, 0, 0);
+        _status.Dock = DockStyle.Fill; _status.TextAlign = ContentAlignment.MiddleLeft; statusbar.Controls.Add(_status, 1, 0);
+        _cancel.Dock = DockStyle.Fill; _cancel.Margin = new Padding(0, 2, 10, 2); statusbar.Controls.Add(_cancel, 2, 0);
+        statusbar.Controls.Add(new Label { Text = "ORIGINAL PRESERVADO", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleRight, Font = new Font("Segoe UI Semibold", 8) }, 3, 0);
+        statusbar.Controls.Add(_progress, 0, 1); statusbar.SetColumnSpan(_progress, 4); root.Controls.Add(statusbar, 0, 2);
+
+        void SyncOutput()
+        {
+            _outputFolder.Text = string.IsNullOrWhiteSpace(_output.Text) ? "Destino automático" : _output.Text;
+        }
+        _output.TextChanged += (_, _) => SyncOutput(); SyncOutput();
+    }
+
+    private Control CreateBrand(string title, string version)
+    {
+        var brand = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Tag = "header", Margin = Padding.Empty };
+        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48)); brand.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        var logoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "vfl-suite-logo.png");
+        Control mark;
+        if (File.Exists(logoPath))
+            mark = new PictureBox { Image = Image.FromFile(logoPath), SizeMode = PictureBoxSizeMode.Zoom, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 8, 0) };
+        else
+            mark = new Label { Text = "V", Dock = DockStyle.Fill, BackColor = Theme.Primary, Tag = "accent", TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI Black", 15), Margin = new Padding(0, 0, 8, 0) };
+        brand.Controls.Add(mark, 0, 0);
+        brand.Controls.Add(new Label { Text = $"{title}  •  {version}", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Segoe UI Semibold", 11.5f), Margin = Padding.Empty }, 1, 0);
+        return brand;
+    }
+
+    private Control CreatePlaybackPanel()
+    {
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 2, Padding = new Padding(24, 6, 24, 8), Tag = "header", Margin = Padding.Empty };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+        _timeline.Margin = new Padding(0, 3, 10, 0); panel.Controls.Add(_timeline, 0, 0); panel.Controls.Add(_previewTime, 1, 0);
+        var controls = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Tag = "header", Margin = Padding.Empty };
+        controls.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        foreach (var item in new[] { (_play, 1), (_pause, 2), (_stop, 3) }) { item.Item1.Dock = DockStyle.Fill; item.Item1.Margin = new Padding(4); controls.Controls.Add(item.Item1, item.Item2, 0); }
+        panel.Controls.Add(controls, 0, 1); panel.SetColumnSpan(controls, 2); return panel;
+    }
+
+    private static Label SectionTitle(string text, string icon) => new()
+    {
+        Text = $"{icon}  {text}", Dock = DockStyle.Fill, ForeColor = Theme.Text,
+        Font = new Font("Segoe UI Semibold", 9), TextAlign = ContentAlignment.MiddleLeft
+    };
+
+    private static Control StackedNumber(string title, NumericUpDown number, string hint)
+    {
+        var row = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 2, Tag = "sidebar", Margin = Padding.Empty };
+        row.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+        row.Controls.Add(new Label { Text = title, Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f), TextAlign = ContentAlignment.BottomLeft }, 0, 0);
+        number.Dock = DockStyle.Fill; number.Margin = new Padding(0, 6, 0, 6); row.Controls.Add(number, 1, 0); row.SetRowSpan(number, 2);
+        row.Controls.Add(new Label { Text = hint, Dock = DockStyle.Fill, ForeColor = Theme.Dim, Font = new Font("Segoe UI", 7.3f), TextAlign = ContentAlignment.TopLeft }, 0, 1); return row;
+    }
+
+    private static Control StackedCombo(string title, ComboBox combo)
+    {
+        var row = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Tag = "sidebar", Margin = Padding.Empty };
+        row.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        row.Controls.Add(new Label { Text = title, Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f), TextAlign = ContentAlignment.BottomLeft }, 0, 0);
+        combo.Dock = DockStyle.Fill; combo.Margin = new Padding(0, 6, 0, 4); row.Controls.Add(combo, 0, 1); return row;
+    }
+
+    private async Task SelectVideoAsync()
+    {
+        using var dialog = new OpenFileDialog { Filter = "Vídeos MP4|*.mp4|Vídeos|*.mp4;*.mov;*.mkv;*.webm", Title = "Selecione o vídeo com fundo sólido" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        ResetVideoState(false); _input.Text = dialog.FileName;
+        _output.Text = GetAvailableOutputPath(Path.Combine(Path.GetDirectoryName(dialog.FileName)!, Path.GetFileNameWithoutExtension(dialog.FileName) + "_TOKEN.webm"));
+        _videoTitle.Text = Path.GetFileName(dialog.FileName); _videoMeta.Text = "Detectando o fundo e preparando a prévia...";
+        await AnalyzeAsync();
+    }
+
+    private void SelectOutput()
+    {
+        using var dialog = new SaveFileDialog { Filter = "WebM transparente|*.webm", DefaultExt = "webm", AddExtension = true, Title = "Salvar token WebM em", FileName = string.IsNullOrWhiteSpace(_output.Text) ? "token.webm" : Path.GetFileName(_output.Text), InitialDirectory = string.IsNullOrWhiteSpace(_output.Text) ? null : Path.GetDirectoryName(_output.Text) };
+        if (dialog.ShowDialog(this) == DialogResult.OK) _output.Text = dialog.FileName;
     }
 
     private void BuildUi()
@@ -293,10 +464,12 @@ internal sealed class MainForm : Form
             ConfigureTimeline();
             SetPreviewPosition(0);
             SetPlaybackControlsEnabled(true);
+            _videoTitle.Text = Path.GetFileName(_input.Text);
+            _videoMeta.Text = $"{FormatTime(_analysis.Video.Duration)}  •  fundo {_detected.Text}";
             _status.Text = $"Prévia pronta • Zoom {_zoom.Value:0}% • X {_positionX.Value:+0;-0;0} • Y {_positionY.Value:+0;-0;0}";
         }
-        catch (OperationCanceledException) { _status.Text = "Análise cancelada."; }
-        catch (Exception exception) { _status.Text = "Falha na análise."; TokenDialog.ShowMessage(this, "Erro na análise", exception.Message); }
+        catch (OperationCanceledException) { _status.Text = "Análise cancelada."; _videoMeta.Text = "Análise cancelada"; }
+        catch (Exception exception) { _status.Text = "Falha na análise."; _videoMeta.Text = "Não foi possível analisar este arquivo"; TokenDialog.ShowMessage(this, "Erro na análise", exception.Message); }
         finally { SetBusy(false); _cts.Dispose(); _cts = null; }
     }
 
@@ -336,9 +509,10 @@ internal sealed class MainForm : Form
 
     private void SetBusy(bool busy)
     {
-        _render.Enabled = !busy; _clear.Enabled = !busy; _cancel.Enabled = busy;
+        _render.Enabled = !busy && _analysis is not null; _clear.Enabled = !busy; _cancel.Enabled = busy;
+        _selectVideo.Enabled = !busy; _selectOutput.Enabled = !busy;
         _similarity.Enabled = !busy; _blend.Enabled = !busy; _zoom.Enabled = !busy;
-        _positionX.Enabled = !busy; _positionY.Enabled = !busy;
+        _positionX.Enabled = !busy; _positionY.Enabled = !busy; _quality.Enabled = !busy; _keepAudio.Enabled = !busy;
         _timeline.Enabled = !busy && _analysis is not null;
         if (busy)
         {
@@ -359,6 +533,7 @@ internal sealed class MainForm : Form
     {
         SaveSettings();
         PausePlayback();
+        if (_analysis is not null) _videoMeta.Text = "Enquadramento alterado • atualizando prévia";
         SchedulePreviewRefresh();
     }
 
@@ -379,6 +554,8 @@ internal sealed class MainForm : Form
         {
             _input.Clear();
             _output.Clear();
+            _videoTitle.Text = "Nenhum vídeo carregado";
+            _videoMeta.Text = "Selecione um arquivo para começar";
         }
         UpdatePreviewTime();
         SetPlaybackControlsEnabled(false);
