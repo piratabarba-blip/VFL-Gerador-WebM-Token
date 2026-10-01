@@ -48,6 +48,7 @@ Reprodutores comuns podem mostrar o fundo verde porque não interpretam alfa em 
 - Bitrate: `20M`
 - GOP: `15`
 - Formato: `yuva420p`
+- Pixels 100% transparentes armazenam RGB preto, evitando miniaturas verdes em programas que ignoram o alpha
 - Áudio: Vorbis qualidade 4
 
 ## Compilar o código

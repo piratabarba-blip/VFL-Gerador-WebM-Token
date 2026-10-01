@@ -186,7 +186,14 @@ internal sealed class VideoAnalyzer
                scale + "," +
                $"rotate={radians.ToString("0.########", ci)}:ow={rotatedWidth}:oh={rotatedHeight}:c=none," +
                $"pad={canvasWidth}:{canvasHeight}:{padX}:{padY}:color=black@0," +
-               $"crop=1080:1080:{cropX}:{cropY},format=yuva420p";
+               $"crop=1080:1080:{cropX}:{cropY}," +
+               // Alguns geradores de miniatura ignoram o alpha do VP9 e exibem o RGB oculto.
+               // Zerar somente pixels 100% transparentes troca esse verde invisivel por preto sem
+               // alterar o personagem nem as bordas semitransparentes.
+               "geq=r='if(eq(alpha(X,Y),0),0,r(X,Y))':" +
+               "g='if(eq(alpha(X,Y),0),0,g(X,Y))':" +
+               "b='if(eq(alpha(X,Y),0),0,b(X,Y))':a='alpha(X,Y)'," +
+               "format=yuva420p";
     }
 
     private static int Even(int value) => Math.Max(2, value - value % 2);
