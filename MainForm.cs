@@ -6,23 +6,11 @@ internal sealed class MainForm : Form
 {
     private readonly TextBox _input = new();
     private readonly TextBox _output = new();
-    private readonly NumericUpDown _similarity = Number(0.001m, 0.5m, 0.260m, 0.001m, 3);
-    private readonly NumericUpDown _blend = Number(0, 0.3m, 0.30m, 0.01m);
-    private readonly NumericUpDown _zoom = new()
-    {
-        Minimum = 50, Maximum = 180, Value = 100, Increment = 5,
-        DecimalPlaces = 0, TextAlign = HorizontalAlignment.Center
-    };
-    private readonly NumericUpDown _positionX = new()
-    {
-        Minimum = -400, Maximum = 400, Value = 0, Increment = 10,
-        DecimalPlaces = 0, TextAlign = HorizontalAlignment.Center
-    };
-    private readonly NumericUpDown _positionY = new()
-    {
-        Minimum = -400, Maximum = 400, Value = 0, Increment = 10,
-        DecimalPlaces = 0, TextAlign = HorizontalAlignment.Center
-    };
+    private readonly ValueSlider _similarity = Slider(0.001m, 0.5m, 0.260m, 0.001m, 3);
+    private readonly ValueSlider _blend = Slider(0, 0.3m, 0.30m, 0.01m, 2);
+    private readonly ValueSlider _zoom = Slider(50, 180, 100, 5, 0);
+    private readonly ValueSlider _positionX = Slider(-400, 400, 0, 10, 0);
+    private readonly ValueSlider _positionY = Slider(-400, 400, 0, 10, 0);
     private readonly ComboBox _quality = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly CheckBox _keepAudio = new() { Text = "Manter áudio quando existir", Checked = true, AutoSize = true };
     private readonly CheckerPreview _preview = new() { Dock = DockStyle.Fill };
@@ -239,14 +227,16 @@ internal sealed class MainForm : Form
         Font = new Font("Segoe UI Semibold", 9), TextAlign = ContentAlignment.MiddleLeft
     };
 
-    private static Control StackedNumber(string title, NumericUpDown number, string hint)
+    private static Control StackedNumber(string title, ValueSlider slider, string hint)
     {
-        var row = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 2, Tag = "sidebar", Margin = Padding.Empty };
-        row.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+        var row = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Tag = "sidebar", Margin = Padding.Empty };
+        row.RowStyles.Add(new RowStyle(SizeType.Absolute, 19));
+        row.RowStyles.Add(new RowStyle(SizeType.Absolute, 15));
+        row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         row.Controls.Add(new Label { Text = title, Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f), TextAlign = ContentAlignment.BottomLeft }, 0, 0);
-        number.Dock = DockStyle.Fill; number.Margin = new Padding(0, 6, 0, 6); row.Controls.Add(number, 1, 0); row.SetRowSpan(number, 2);
-        row.Controls.Add(new Label { Text = hint, Dock = DockStyle.Fill, ForeColor = Theme.Dim, Font = new Font("Segoe UI", 7.3f), TextAlign = ContentAlignment.TopLeft }, 0, 1); return row;
+        row.Controls.Add(new Label { Text = hint, Dock = DockStyle.Fill, ForeColor = Theme.Dim, Font = new Font("Segoe UI", 7.3f), TextAlign = ContentAlignment.TopLeft }, 0, 1);
+        slider.Dock = DockStyle.Fill; slider.Margin = new Padding(0, 1, 0, 1); row.Controls.Add(slider, 0, 2);
+        return row;
     }
 
     private static Control StackedCombo(string title, ComboBox combo)
@@ -436,12 +426,12 @@ internal sealed class MainForm : Form
         return row;
     }
 
-    private static Control SettingRow(string label, NumericUpDown number, string hint)
+    private static Control SettingRow(string label, ValueSlider slider, string hint)
     {
         var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Tag = "surface" };
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 165));
         row.Controls.Add(new Label { Text = label.ToUpperInvariant(), Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-        number.Dock = DockStyle.Fill; number.Margin = new Padding(0, 12, 10, 12); row.Controls.Add(number, 1, 0);
+        slider.Dock = DockStyle.Fill; slider.Margin = new Padding(0, 8, 10, 8); row.Controls.Add(slider, 1, 0);
         row.Controls.Add(new Label { Text = hint, Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Segoe UI", 8) }, 2, 0);
         return row;
     }
@@ -797,8 +787,8 @@ internal sealed class MainForm : Form
         Location = new Point(area.Left + (area.Width - Width) / 2, area.Top + (area.Height - Height) / 2);
     }
 
-    private static NumericUpDown Number(decimal min, decimal max, decimal value, decimal increment, int decimalPlaces = 2) =>
-        new() { Minimum = min, Maximum = max, Value = value, Increment = increment, DecimalPlaces = decimalPlaces, TextAlign = HorizontalAlignment.Center };
+    private static ValueSlider Slider(decimal min, decimal max, decimal value, decimal increment, int decimalPlaces) =>
+        new() { Minimum = min, Maximum = max, Value = value, Increment = increment, DecimalPlaces = decimalPlaces, Tag = "surface" };
 
     private static decimal Clamp(decimal value, decimal minimum, decimal maximum) =>
         Math.Min(maximum, Math.Max(minimum, value));
