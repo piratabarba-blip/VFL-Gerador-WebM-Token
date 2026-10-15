@@ -17,7 +17,7 @@ internal sealed class DynamicMapControl : UserControl
     private readonly CheckBox _removeBackground = new() { Text = "Remover fundo sólido e criar transparência", AutoSize = true };
     private readonly CheckBox _keepAudio = new() { Text = "Manter áudio quando existir", AutoSize = true };
     private readonly CheckBox _seamlessLoop = new() { Text = "Criar loop contínuo sem salto", AutoSize = true };
-    private readonly CheckBox _stabilize = new() { Text = "Estabilizar tremidas e pequenos saltos", AutoSize = true };
+    private readonly CheckBox _stabilize = new() { Text = "Travar câmera no cenário (tripé virtual)", AutoSize = true };
     private readonly ValueSlider _similarity = Slider(0.001m, 0.5m, 0.260m, 0.001m, 3);
     private readonly ValueSlider _blend = Slider(0, 0.3m, 0.30m, 0.01m, 2);
     private readonly ValueSlider _loopDuration = Slider(0.25m, 3.00m, 1.00m, 0.25m, 2);
@@ -152,7 +152,7 @@ internal sealed class DynamicMapControl : UserControl
         foreach (var text in new[] { "Proporção e resolução preservadas", "WebM VP9 • alpha e áudio opcionais", "Processamento 100% local" })
             specs.Controls.Add(new Label { Text = "•  " + text, Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f), TextAlign = ContentAlignment.MiddleLeft });
         right.Controls.Add(specs, 0, 7);
-        right.Controls.Add(new Label { Text = "O loop mistura o final com o começo. A estabilização reduz tremidas, mas pode aplicar um leve zoom para esconder as bordas.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.2f), Padding = new Padding(4, 8, 4, 2) }, 0, 8);
+        right.Controls.Add(new Label { Text = "O loop une final e começo. O tripé virtual ancora o cenário em um quadro de referência e pode aplicar leve zoom para esconder bordas.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.2f), Padding = new Padding(4, 8, 4, 2) }, 0, 8);
         _render.Dock = DockStyle.Fill; _render.Margin = new Padding(0, 4, 0, 2); right.Controls.Add(_render, 0, 9);
         _clear.Dock = DockStyle.Fill; _clear.Margin = new Padding(0, 6, 0, 0); right.Controls.Add(_clear, 0, 10); main.Controls.Add(right, 2, 0);
 
@@ -237,7 +237,13 @@ internal sealed class DynamicMapControl : UserControl
         _keepAudio.CheckedChanged += (_, _) => SaveSettings();
         _seamlessLoop.CheckedChanged += (_, _) => LoopChanged();
         _loopDuration.ValueChanged += (_, _) => LoopSettingChanged();
-        _stabilize.CheckedChanged += (_, _) => { SaveSettings(); PausePlayback(); UpdatePreviewMode(); SchedulePreview(); };
+        _stabilize.CheckedChanged += (_, _) =>
+        {
+            SaveSettings(); PausePlayback(); UpdatePreviewMode(); SchedulePreview();
+            _status.Text = _stabilize.Checked
+                ? "Tripé virtual ativado — o cenário será ancorado ao gerar o mapa."
+                : "Tripé virtual desativado.";
+        };
         _timeline.Scroll += (_, _) => { PausePlayback(); _previewPositionSeconds = TimelineToSeconds(); UpdatePreviewTime(); SchedulePreview(); };
         _play.Click += async (_, _) => await StartPlaybackAsync();
         _pause.Click += (_, _) => PausePlayback();
@@ -449,7 +455,7 @@ internal sealed class DynamicMapControl : UserControl
     private void UpdatePreviewMode()
     {
         var alpha = _removeBackground.Checked || _analysis?.Video.HasAlpha == true ? "VP9 ALPHA" : "VP9";
-        _previewMode.Text = "PROPORÇÃO ORIGINAL  •  " + alpha + (_seamlessLoop.Checked ? "  •  LOOP" : "") + (_stabilize.Checked ? "  •  ESTÁVEL" : "");
+        _previewMode.Text = "PROPORÇÃO ORIGINAL  •  " + alpha + (_seamlessLoop.Checked ? "  •  LOOP" : "") + (_stabilize.Checked ? "  •  CÂMERA FIXA" : "");
     }
 
     private void PreviewSettingChanged()

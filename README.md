@@ -35,8 +35,9 @@ Aplicativo Windows para criar tokens transparentes e mapas dinâmicos **WebM VP9
 - Opção **Criar loop contínuo sem salto**, que cruza o final com o começo e deixa a repetição natural no Foundry.
 - Controle de suavização do loop entre `0,25` e `3` segundos.
 - Botão **Testar loop** para assistir somente à passagem final → começo antes de exportar.
-- Opção **Estabilizar tremidas e pequenos saltos**, com análise de movimento em duas etapas.
-- A estabilização aplica zoom adaptativo leve quando necessário para esconder as bordas criadas pela correção.
+- Opção **Travar câmera no cenário (tripé virtual)**, com análise de movimento em duas etapas.
+- O tripé virtual compara os quadros com uma referência fixa, compensando puxões laterais e mantendo o cenário ancorado.
+- A correção aplica zoom adaptativo leve quando necessário para esconder as bordas criadas pelo reposicionamento.
 - Áudio também recebe transição suave quando o loop e a preservação de áudio estão ativados.
 
 ## Mapas dinâmicos — desde a versão 3.0
@@ -73,7 +74,7 @@ Windows 10 ou 11 de 64 bits. O pacote da seção **Releases** já inclui o FFmpe
 4. Se houver fundo sólido, ative **Remover fundo sólido** e ajuste a cor, tolerância e suavização.
 5. Confira todo o vídeo pela linha do tempo.
 6. Para repetição infinita, ative **Criar loop contínuo**, ajuste a suavização e use **Testar loop**.
-7. Se o vídeo tiver tremidas ou pequenos saltos, ative **Estabilizar**. Deixe desligado quando quiser preservar exatamente todo o movimento original.
+7. Se o cenário deveria ficar parado, mas o vídeo tiver tremidas ou puxões laterais, ative **Travar câmera no cenário**. Deixe desligado quando houver movimento de câmera intencional.
 8. Comece com **Equilibrada + 24 FPS** e clique em **Gerar mapa WebM**.
 9. Importe o arquivo `_MAPA_FOUNDRY.webm` no Foundry.
 
@@ -101,7 +102,7 @@ Reprodutores comuns podem mostrar o fundo verde porque não interpretam alfa em 
 - Chroma: desligado
 - Áudio: desligado; quando ativado usa Opus a 96 kbps
 - Loop contínuo: desligado; suavização padrão de 1 segundo
-- Estabilização: desligada
+- Tripé virtual: desligado
 
 ## Compilar o código
 

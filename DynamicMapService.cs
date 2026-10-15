@@ -74,8 +74,7 @@ internal sealed class DynamicMapService
         var (width, height) = FitWithin(analysis.Video.Width, analysis.Video.Height, 900, 500);
         var finalFrameSecond = Math.Max(0, analysis.Video.Duration - 1 / Math.Max(1, analysis.Video.FrameRate));
         var seek = Math.Clamp(positionSeconds, 0, finalFrameSecond);
-        var filter = BuildBaseFilter(analysis, removeBackground, similarity, blend,
-                         stabilize ? "deshake=rx=16:ry=16:edge=mirror" : null) +
+        var filter = BuildBaseFilter(analysis, removeBackground, similarity, blend) +
                      $",scale={width}:{height}:flags=fast_bilinear,fps={previewFps.ToString(CultureInfo.InvariantCulture)},format=bgra";
         var arguments = DecoderArguments(analysis.Video);
         arguments.AddRange(["-hide_banner", "-loglevel", "error", "-re", "-ss",
@@ -116,8 +115,7 @@ internal sealed class DynamicMapService
         var afterEnd = Math.Min(analysis.Video.Duration, fade + context);
         var (width, height) = FitWithin(analysis.Video.Width, analysis.Video.Height, 900, 500);
         var ci = CultureInfo.InvariantCulture;
-        var baseFilter = BuildBaseFilter(analysis, removeBackground, similarity, blend,
-            stabilize ? "deshake=rx=16:ry=16:edge=mirror" : null);
+        var baseFilter = BuildBaseFilter(analysis, removeBackground, similarity, blend);
         var filter =
             $"[0:v]{baseFilter},fps={previewFps.ToString(ci)},settb=AVTB,split=3[tail][head][after];" +
             $"[tail]trim=start={tailStart.ToString("0.######", ci)}:end={analysis.Video.Duration.ToString("0.######", ci)},setpts=PTS-STARTPTS[vt];" +
@@ -172,9 +170,10 @@ internal sealed class DynamicMapService
             if (stabilize)
             {
                 transformsPath = Path.Combine(Path.GetTempPath(), "VFL-estabilizacao-" + Guid.NewGuid().ToString("N") + ".trf");
-                progress.Report(new RenderProgress(1, "Analisando tremidas e movimentos da câmera..."));
+                progress.Report(new RenderProgress(1, "Identificando o cenário fixo para travar a câmera..."));
                 await DetectStabilizationAsync(input, analysis.Video, transformsPath, cancellationToken);
-                stabilizationFilter = $"vidstabtransform=input='{EscapeFilterPath(transformsPath)}':smoothing=15:optzoom=2:zoomspeed=0.15:interpol=bicubic";
+                stabilizationFilter = $"vidstabtransform=input='{EscapeFilterPath(transformsPath)}':tripod=1:" +
+                                      "maxangle=0:maxshift=120:optzoom=2:zoomspeed=0.15:interpol=bicubic";
             }
 
             var arguments = DecoderArguments(analysis.Video);
@@ -306,7 +305,9 @@ internal sealed class DynamicMapService
     {
         var arguments = DecoderArguments(video);
         arguments.AddRange(["-y", "-hide_banner", "-loglevel", "error", "-i", input, "-an", "-sn", "-dn",
-            "-vf", $"vidstabdetect=shakiness=5:accuracy=9:stepsize=6:mincontrast=0.25:result='{EscapeFilterPath(transformsPath)}'",
+            "-vf", $"crop=iw*0.70:ih*0.70:(iw-ow)/2:(ih-oh)/2," +
+                   $"vidstabdetect=shakiness=8:accuracy=15:stepsize=4:mincontrast=0.12:tripod=1:" +
+                   $"result='{EscapeFilterPath(transformsPath)}'",
             "-f", "null", "-"]);
         await RunAsync(_ffmpeg, arguments, cancellationToken);
     }
