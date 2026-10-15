@@ -18,6 +18,9 @@ internal sealed class AppSettings
     public string MapFrameRate { get; set; } = "24 FPS";
     public bool MapKeepAudio { get; set; }
     public bool MapRemoveBackground { get; set; }
+    public bool MapSeamlessLoop { get; set; }
+    public decimal MapLoopDuration { get; set; } = 1.00m;
+    public bool MapStabilize { get; set; }
 
     private static string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

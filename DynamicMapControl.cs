@@ -13,10 +13,14 @@ internal sealed class DynamicMapControl : UserControl
     private readonly Button _play = new() { Text = "PLAY", Enabled = false };
     private readonly Button _pause = new() { Text = "PAUSA", Enabled = false };
     private readonly Button _stop = new() { Text = "STOP", Enabled = false };
+    private readonly Button _testLoop = new() { Text = "TESTAR LOOP", Enabled = false };
     private readonly CheckBox _removeBackground = new() { Text = "Remover fundo sólido e criar transparência", AutoSize = true };
     private readonly CheckBox _keepAudio = new() { Text = "Manter áudio quando existir", AutoSize = true };
+    private readonly CheckBox _seamlessLoop = new() { Text = "Criar loop contínuo sem salto", AutoSize = true };
+    private readonly CheckBox _stabilize = new() { Text = "Estabilizar tremidas e pequenos saltos", AutoSize = true };
     private readonly ValueSlider _similarity = Slider(0.001m, 0.5m, 0.260m, 0.001m, 3);
     private readonly ValueSlider _blend = Slider(0, 0.3m, 0.30m, 0.01m, 2);
+    private readonly ValueSlider _loopDuration = Slider(0.25m, 3.00m, 1.00m, 0.25m, 2);
     private readonly ComboBox _quality = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _frameRate = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly AspectPreview _preview = new() { Dock = DockStyle.Fill };
@@ -132,21 +136,25 @@ internal sealed class DynamicMapControl : UserControl
         _preview.Margin = new Padding(18, 0, 18, 6); workspace.Controls.Add(_preview, 0, 1);
         workspace.Controls.Add(CreatePlaybackPanel(), 0, 2); main.Controls.Add(workspace, 1, 0);
 
-        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 9, Padding = new Padding(16, 14, 16, 14), Tag = "sidebar", Margin = Padding.Empty };
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 72)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 154)); right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 2));
+        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 11, Padding = new Padding(16, 14, 16, 14), Tag = "sidebar", Margin = Padding.Empty, AutoScroll = true };
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 62)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 100)); right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
         right.Controls.Add(SectionTitle("OTIMIZAÇÃO PARA FOUNDRY", "↗"), 0, 0);
         right.Controls.Add(ComboCard("QUALIDADE", _quality), 0, 1);
         right.Controls.Add(ComboCard("QUADROS POR SEGUNDO", _frameRate), 0, 2);
         _keepAudio.Dock = DockStyle.Fill; _keepAudio.Padding = new Padding(8, 0, 0, 0); _keepAudio.Tag = "card"; right.Controls.Add(_keepAudio, 0, 3);
+        _seamlessLoop.Dock = DockStyle.Fill; _seamlessLoop.Padding = new Padding(8, 0, 0, 0); _seamlessLoop.Tag = "card"; right.Controls.Add(_seamlessLoop, 0, 4);
+        _stabilize.Dock = DockStyle.Fill; _stabilize.Padding = new Padding(8, 0, 0, 0); _stabilize.Tag = "card"; right.Controls.Add(_stabilize, 0, 5);
+        right.Controls.Add(SliderRow("SUAVIZAÇÃO DO LOOP", _loopDuration, "0,25 a 3 segundos"), 0, 6);
         var specs = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6, Tag = "card", Padding = new Padding(12), Margin = new Padding(0, 8, 0, 8) };
-        foreach (var text in new[] { "Proporção original preservada", "Resolução original preservada", "WebM VP9 otimizado", "Alpha opcional", "Áudio Opus opcional", "Processamento 100% local" })
+        foreach (var text in new[] { "Proporção e resolução preservadas", "WebM VP9 • alpha e áudio opcionais", "Processamento 100% local" })
             specs.Controls.Add(new Label { Text = "•  " + text, Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f), TextAlign = ContentAlignment.MiddleLeft });
-        right.Controls.Add(specs, 0, 4);
-        right.Controls.Add(new Label { Text = "Equilibrada + 24 FPS é o melhor ponto de partida para mapas. Use Alta quando houver muitos detalhes finos ou movimento intenso.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.4f), Padding = new Padding(4, 12, 4, 4) }, 0, 5);
-        _render.Dock = DockStyle.Fill; _render.Margin = new Padding(0, 4, 0, 2); right.Controls.Add(_render, 0, 6);
-        _clear.Dock = DockStyle.Fill; _clear.Margin = new Padding(0, 6, 0, 0); right.Controls.Add(_clear, 0, 7); main.Controls.Add(right, 2, 0);
+        right.Controls.Add(specs, 0, 7);
+        right.Controls.Add(new Label { Text = "O loop mistura o final com o começo. A estabilização reduz tremidas, mas pode aplicar um leve zoom para esconder as bordas.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.2f), Padding = new Padding(4, 8, 4, 2) }, 0, 8);
+        _render.Dock = DockStyle.Fill; _render.Margin = new Padding(0, 4, 0, 2); right.Controls.Add(_render, 0, 9);
+        _clear.Dock = DockStyle.Fill; _clear.Margin = new Padding(0, 6, 0, 0); right.Controls.Add(_clear, 0, 10); main.Controls.Add(right, 2, 0);
 
         var statusbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 2, Padding = new Padding(16, 4, 16, 5), Tag = "header", Margin = Padding.Empty };
         statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
@@ -167,7 +175,7 @@ internal sealed class DynamicMapControl : UserControl
             : new Label { Text = "V", Location = new Point(0, 5), Size = new Size(44, 44), BackColor = Theme.Primary, Tag = "accent", TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI Black", 15) };
         brand.Controls.Add(mark);
         brand.Controls.Add(new Label { Text = "VFL Mapas Dinâmicos", Location = new Point(50, 3), Size = new Size(235, 25), Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right, TextAlign = ContentAlignment.BottomLeft, Font = new Font("Segoe UI Semibold", 11.5f), Margin = Padding.Empty });
-        brand.Controls.Add(new Label { Text = "WEBM VP9 PARA VTT  •  v3.0", Location = new Point(50, 29), Size = new Size(235, 16), Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right, Tag = "brand-badge", TextAlign = ContentAlignment.TopLeft, Font = new Font("Segoe UI Semibold", 6.8f), Margin = Padding.Empty });
+        brand.Controls.Add(new Label { Text = "WEBM VP9 PARA VTT  •  v3.1", Location = new Point(50, 29), Size = new Size(235, 16), Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right, Tag = "brand-badge", TextAlign = ContentAlignment.TopLeft, Font = new Font("Segoe UI Semibold", 6.8f), Margin = Padding.Empty });
         return brand;
     }
 
@@ -177,9 +185,11 @@ internal sealed class DynamicMapControl : UserControl
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20)); panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _timeline.Margin = new Padding(0, 2, 0, 0); panel.Controls.Add(_timeline, 0, 0);
         _previewTime.Dock = DockStyle.Fill; _previewTime.Margin = Padding.Empty; panel.Controls.Add(_previewTime, 0, 1);
-        var controls = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Tag = "header", Margin = Padding.Empty };
-        controls.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100)); controls.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        foreach (var item in new[] { (_play, 1), (_pause, 2), (_stop, 3) }) { item.Item1.Dock = DockStyle.Fill; item.Item1.Margin = new Padding(4); controls.Controls.Add(item.Item1, item.Item2, 0); }
+        var controls = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, Tag = "header", Margin = Padding.Empty };
+        controls.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        for (var index = 0; index < 4; index++) controls.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
+        controls.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        foreach (var item in new[] { (_play, 1), (_pause, 2), (_stop, 3), (_testLoop, 4) }) { item.Item1.Dock = DockStyle.Fill; item.Item1.Margin = new Padding(4); controls.Controls.Add(item.Item1, item.Item2, 0); }
         panel.Controls.Add(controls, 0, 2);
         return panel;
     }
@@ -225,10 +235,14 @@ internal sealed class DynamicMapControl : UserControl
         _quality.SelectedIndexChanged += (_, _) => SaveSettings();
         _frameRate.SelectedIndexChanged += (_, _) => SaveSettings();
         _keepAudio.CheckedChanged += (_, _) => SaveSettings();
+        _seamlessLoop.CheckedChanged += (_, _) => LoopChanged();
+        _loopDuration.ValueChanged += (_, _) => LoopSettingChanged();
+        _stabilize.CheckedChanged += (_, _) => { SaveSettings(); PausePlayback(); UpdatePreviewMode(); SchedulePreview(); };
         _timeline.Scroll += (_, _) => { PausePlayback(); _previewPositionSeconds = TimelineToSeconds(); UpdatePreviewTime(); SchedulePreview(); };
         _play.Click += async (_, _) => await StartPlaybackAsync();
         _pause.Click += (_, _) => PausePlayback();
         _stop.Click += async (_, _) => await StopPlaybackAsync();
+        _testLoop.Click += async (_, _) => await TestLoopAsync();
         _previewDebounce.Tick += async (_, _) => { _previewDebounce.Stop(); await RefreshPreviewAsync(); };
     }
 
@@ -285,7 +299,7 @@ internal sealed class DynamicMapControl : UserControl
                 (double)_similarity.Value, (double)_blend.Value, _previewPositionSeconds, cts.Token);
             if (cts.IsCancellationRequested) return;
             _preview.PreviewImage = LoadImage(previewPath);
-            _previewMode.Text = _removeBackground.Checked ? "PROPORÇÃO ORIGINAL  •  VP9 ALPHA" : "PROPORÇÃO ORIGINAL  •  VP9";
+            UpdatePreviewMode();
             _status.Text = $"Prévia pronta • {_analysis.Video.Width}×{_analysis.Video.Height} • proporção preservada";
         }
         catch (OperationCanceledException) { }
@@ -309,7 +323,7 @@ internal sealed class DynamicMapControl : UserControl
         {
             _status.Text = "Reproduzindo prévia a 24 FPS...";
             await new DynamicMapService().StreamPreviewAsync(_inputPath, _analysis, _removeBackground.Checked,
-                (double)_similarity.Value, (double)_blend.Value, start, async (bitmap, seconds) =>
+                (double)_similarity.Value, (double)_blend.Value, _stabilize.Checked, start, async (bitmap, seconds) =>
                 {
                     if (cts.IsCancellationRequested) { bitmap.Dispose(); return; }
                     var updated = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -338,6 +352,43 @@ internal sealed class DynamicMapControl : UserControl
         SetPreviewPosition(0); await RefreshPreviewAsync();
     }
 
+    private async Task TestLoopAsync()
+    {
+        if (_analysis is null || !_seamlessLoop.Checked || _operationCts is not null) return;
+        PausePlayback(); _previewDebounce.Stop(); _previewCts?.Cancel();
+        var cts = new CancellationTokenSource(); _playbackCts = cts; _isPlaying = true;
+        _play.Enabled = false; _pause.Enabled = true; _stop.Enabled = true; _testLoop.Enabled = false;
+        try
+        {
+            _status.Text = "Testando somente a passagem final → começo...";
+            await new DynamicMapService().StreamLoopPreviewAsync(_inputPath, _analysis, _removeBackground.Checked,
+                (double)_similarity.Value, (double)_blend.Value, _stabilize.Checked, (double)_loopDuration.Value,
+                async (bitmap, seconds) =>
+                {
+                    if (cts.IsCancellationRequested) { bitmap.Dispose(); return; }
+                    var updated = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    BeginInvoke(() =>
+                    {
+                        if (cts.IsCancellationRequested) bitmap.Dispose();
+                        else { _preview.PreviewImage = bitmap; _previewTime.Text = $"TESTE DO LOOP  •  {FormatTime(seconds)}"; }
+                        updated.TrySetResult(true);
+                    });
+                    await updated.Task;
+                }, cts.Token);
+            if (!cts.IsCancellationRequested) _status.Text = "Teste concluído — observe se a passagem final → começo ficou natural.";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { _status.Text = "Falha ao testar o loop: " + exception.Message.Split('\n')[0]; }
+        finally
+        {
+            if (ReferenceEquals(_playbackCts, cts))
+            {
+                _isPlaying = false; _playbackCts.Dispose(); _playbackCts = null;
+                UpdatePreviewTime(); SetPlaybackEnabled(_analysis is not null);
+            }
+        }
+    }
+
     private async Task RenderAsync()
     {
         if (_analysis is null || !File.Exists(_inputPath)) { TokenDialog.ShowMessage(FindForm()!, "Vídeo necessário", "Selecione e analise um vídeo antes de gerar."); return; }
@@ -350,7 +401,8 @@ internal sealed class DynamicMapControl : UserControl
             var progress = new Progress<RenderProgress>(item => { _progress.Value = (int)item.Percent; _status.Text = item.Message; });
             var originalSize = new FileInfo(_inputPath).Length;
             await new DynamicMapService().RenderAsync(_inputPath, _outputPath, _analysis, _removeBackground.Checked,
-                (double)_similarity.Value, (double)_blend.Value, quality, SelectedFrameRate(), _keepAudio.Checked, progress, _operationCts.Token);
+                (double)_similarity.Value, (double)_blend.Value, quality, SelectedFrameRate(), _keepAudio.Checked,
+                _seamlessLoop.Checked, (double)_loopDuration.Value, _stabilize.Checked, progress, _operationCts.Token);
             var finalSize = new FileInfo(_outputPath).Length;
             var reduction = originalSize <= 0 ? 0 : (1 - finalSize / (double)originalSize) * 100;
             var message = $"Mapa WebM concluído!\n\nOriginal: {FormatBytes(originalSize)}\nWebM: {FormatBytes(finalSize)}" +
@@ -376,7 +428,28 @@ internal sealed class DynamicMapControl : UserControl
     private void ChromaChanged()
     {
         UpdateChromaControls(); SaveSettings(); PausePlayback(); SchedulePreview();
-        _previewMode.Text = _removeBackground.Checked ? "PROPORÇÃO ORIGINAL  •  VP9 ALPHA" : "PROPORÇÃO ORIGINAL  •  VP9";
+        UpdatePreviewMode();
+    }
+
+    private void LoopChanged()
+    {
+        _loopDuration.Enabled = _seamlessLoop.Checked && _operationCts is null;
+        SaveSettings(); PausePlayback(); UpdatePreviewMode(); SetPlaybackEnabled(_analysis is not null && _operationCts is null);
+        _status.Text = _seamlessLoop.Checked
+            ? "Loop contínuo ativado — use TESTAR LOOP para conferir a passagem."
+            : "Loop contínuo desativado.";
+    }
+
+    private void LoopSettingChanged()
+    {
+        SaveSettings();
+        if (_seamlessLoop.Checked) _status.Text = $"Transição do loop: {_loopDuration.Value:0.##} segundo(s).";
+    }
+
+    private void UpdatePreviewMode()
+    {
+        var alpha = _removeBackground.Checked || _analysis?.Video.HasAlpha == true ? "VP9 ALPHA" : "VP9";
+        _previewMode.Text = "PROPORÇÃO ORIGINAL  •  " + alpha + (_seamlessLoop.Checked ? "  •  LOOP" : "") + (_stabilize.Checked ? "  •  ESTÁVEL" : "");
     }
 
     private void PreviewSettingChanged()
@@ -400,8 +473,9 @@ internal sealed class DynamicMapControl : UserControl
     {
         _selectVideo.Enabled = !busy; _selectOutput.Enabled = !busy; _clear.Enabled = !busy; _cancel.Enabled = busy;
         _render.Enabled = !busy && _analysis is not null; _quality.Enabled = !busy; _frameRate.Enabled = !busy;
-        _keepAudio.Enabled = !busy; _removeBackground.Enabled = !busy; UpdateChromaControls();
-        if (busy) { PausePlayback(); _play.Enabled = false; _pause.Enabled = false; _stop.Enabled = false; }
+        _keepAudio.Enabled = !busy; _removeBackground.Enabled = !busy; _seamlessLoop.Enabled = !busy; _stabilize.Enabled = !busy;
+        _loopDuration.Enabled = !busy && _seamlessLoop.Checked; UpdateChromaControls();
+        if (busy) { PausePlayback(); _play.Enabled = false; _pause.Enabled = false; _stop.Enabled = false; _testLoop.Enabled = false; }
         else SetPlaybackEnabled(_analysis is not null);
     }
 
@@ -411,7 +485,7 @@ internal sealed class DynamicMapControl : UserControl
         _analysis = null; _inputPath = ""; _outputPath = ""; _previewPositionSeconds = 0;
         _preview.PreviewImage = null; _videoTitle.Text = "Nenhum vídeo carregado"; _videoMeta.Text = "Selecione um arquivo para começar";
         _outputFolder.Text = "Destino automático"; _detected.Text = ""; _colorSwatch.BackColor = Theme.Field;
-        _timeline.Value = 0; _timeline.Maximum = 1_000; _progress.Value = 0; UpdatePreviewTime(); SetPlaybackEnabled(false); UpdateChromaControls();
+        _timeline.Value = 0; _timeline.Maximum = 1_000; _progress.Value = 0; UpdatePreviewTime(); SetPlaybackEnabled(false); UpdateChromaControls(); UpdatePreviewMode();
         _status.Text = "Pronto para o próximo mapa. Suas configurações foram mantidas.";
     }
 
@@ -433,7 +507,7 @@ internal sealed class DynamicMapControl : UserControl
     private double TimelineToSeconds() => _analysis is null ? 0 : _timeline.Value / (double)_timeline.Maximum * _analysis.Video.Duration;
     private void UpdatePreviewTime() => _previewTime.Text = $"{FormatTime(_previewPositionSeconds)} / {FormatTime(_analysis?.Video.Duration ?? 0)}";
     private void PausePlayback() { _isPlaying = false; _playbackCts?.Cancel(); SetPlaybackEnabled(_analysis is not null && _operationCts is null); }
-    private void SetPlaybackEnabled(bool enabled) { _timeline.Enabled = enabled; _play.Enabled = enabled && !_isPlaying; _pause.Enabled = enabled && _isPlaying; _stop.Enabled = enabled; }
+    private void SetPlaybackEnabled(bool enabled) { _timeline.Enabled = enabled; _play.Enabled = enabled && !_isPlaying; _pause.Enabled = enabled && _isPlaying; _stop.Enabled = enabled; _testLoop.Enabled = enabled && !_isPlaying && _seamlessLoop.Checked; }
 
     private double? SelectedFrameRate() => _frameRate.SelectedItem?.ToString() switch
     {
@@ -451,6 +525,9 @@ internal sealed class DynamicMapControl : UserControl
         _quality.SelectedItem = Enum.TryParse<MapQualityPreset>(settings.MapQuality, out var quality) ? quality.ToString() : MapQualityPreset.Equilibrada.ToString();
         _frameRate.SelectedItem = _frameRate.Items.Contains(settings.MapFrameRate) ? settings.MapFrameRate : "24 FPS";
         _keepAudio.Checked = settings.MapKeepAudio; _removeBackground.Checked = settings.MapRemoveBackground;
+        _seamlessLoop.Checked = settings.MapSeamlessLoop;
+        _loopDuration.Value = Clamp(settings.MapLoopDuration, _loopDuration.Minimum, _loopDuration.Maximum);
+        _stabilize.Checked = settings.MapStabilize;
     }
 
     private void SaveSettings()
@@ -460,6 +537,8 @@ internal sealed class DynamicMapControl : UserControl
         settings.MapQuality = _quality.SelectedItem?.ToString() ?? MapQualityPreset.Equilibrada.ToString();
         settings.MapFrameRate = _frameRate.SelectedItem?.ToString() ?? "24 FPS";
         settings.MapKeepAudio = _keepAudio.Checked; settings.MapRemoveBackground = _removeBackground.Checked;
+        settings.MapSeamlessLoop = _seamlessLoop.Checked; settings.MapLoopDuration = _loopDuration.Value;
+        settings.MapStabilize = _stabilize.Checked;
         settings.Save();
     }
 

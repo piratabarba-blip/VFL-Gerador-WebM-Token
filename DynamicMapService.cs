@@ -67,14 +67,15 @@ internal sealed class DynamicMapService
     }
 
     public async Task StreamPreviewAsync(string input, MapAnalysis analysis, bool removeBackground,
-        double similarity, double blend, double positionSeconds, Func<Bitmap, double, Task> showFrame,
+        double similarity, double blend, bool stabilize, double positionSeconds, Func<Bitmap, double, Task> showFrame,
         CancellationToken cancellationToken)
     {
         const double previewFps = 24;
         var (width, height) = FitWithin(analysis.Video.Width, analysis.Video.Height, 900, 500);
         var finalFrameSecond = Math.Max(0, analysis.Video.Duration - 1 / Math.Max(1, analysis.Video.FrameRate));
         var seek = Math.Clamp(positionSeconds, 0, finalFrameSecond);
-        var filter = BuildBaseFilter(analysis, removeBackground, similarity, blend) +
+        var filter = BuildBaseFilter(analysis, removeBackground, similarity, blend,
+                         stabilize ? "deshake=rx=16:ry=16:edge=mirror" : null) +
                      $",scale={width}:{height}:flags=fast_bilinear,fps={previewFps.ToString(CultureInfo.InvariantCulture)},format=bgra";
         var arguments = DecoderArguments(analysis.Video);
         arguments.AddRange(["-hide_banner", "-loglevel", "error", "-re", "-ss",
@@ -104,8 +105,56 @@ internal sealed class DynamicMapService
         catch when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
     }
 
+    public async Task StreamLoopPreviewAsync(string input, MapAnalysis analysis, bool removeBackground,
+        double similarity, double blend, bool stabilize, double loopDuration, Func<Bitmap, double, Task> showFrame,
+        CancellationToken cancellationToken)
+    {
+        const double previewFps = 24;
+        var fade = ClampLoopDuration(analysis.Video.Duration, loopDuration);
+        var context = Math.Min(1d, Math.Max(0.35d, (analysis.Video.Duration - fade * 2) / 2));
+        var tailStart = Math.Max(0, analysis.Video.Duration - fade - context);
+        var afterEnd = Math.Min(analysis.Video.Duration, fade + context);
+        var (width, height) = FitWithin(analysis.Video.Width, analysis.Video.Height, 900, 500);
+        var ci = CultureInfo.InvariantCulture;
+        var baseFilter = BuildBaseFilter(analysis, removeBackground, similarity, blend,
+            stabilize ? "deshake=rx=16:ry=16:edge=mirror" : null);
+        var filter =
+            $"[0:v]{baseFilter},fps={previewFps.ToString(ci)},settb=AVTB,split=3[tail][head][after];" +
+            $"[tail]trim=start={tailStart.ToString("0.######", ci)}:end={analysis.Video.Duration.ToString("0.######", ci)},setpts=PTS-STARTPTS[vt];" +
+            $"[head]trim=start=0:end={fade.ToString("0.######", ci)},setpts=PTS-STARTPTS[vh];" +
+            $"[after]trim=start={fade.ToString("0.######", ci)}:end={afterEnd.ToString("0.######", ci)},setpts=PTS-STARTPTS[va];" +
+            $"[vt][vh]xfade=transition=fade:duration={fade.ToString("0.######", ci)}:offset={context.ToString("0.######", ci)}[vx];" +
+            $"[vx][va]concat=n=2:v=1:a=0,scale={width}:{height}:flags=fast_bilinear,format=bgra[vout]";
+        var arguments = DecoderArguments(analysis.Video);
+        arguments.AddRange(["-hide_banner", "-loglevel", "error", "-i", input, "-an", "-sn", "-dn",
+            "-filter_complex", filter, "-map", "[vout]", "-f", "rawvideo", "-pix_fmt", "bgra", "pipe:1"]);
+        var psi = CreateProcess(_ffmpeg, arguments, redirectOutput: true);
+        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Não foi possível iniciar o teste de loop.");
+        using var registration = cancellationToken.Register(() => { try { if (!process.HasExited) process.Kill(true); } catch { } });
+        var errorTask = process.StandardError.ReadToEndAsync();
+        var buffer = new byte[width * height * 4];
+        var frameIndex = 0L;
+        try
+        {
+            while (await ReadFrameAsync(process.StandardOutput.BaseStream, buffer, cancellationToken))
+            {
+                var bitmap = CreateBitmap(buffer, width, height);
+                try { await showFrame(bitmap, frameIndex / previewFps); }
+                catch { bitmap.Dispose(); throw; }
+                frameIndex++;
+            }
+            await process.WaitForExitAsync(cancellationToken);
+            var error = await errorTask;
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException("Falha ao testar o loop.\n" + error[^Math.Min(error.Length, 2000)..]);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
+    }
+
     public async Task RenderAsync(string input, string output, MapAnalysis analysis, bool removeBackground,
         double similarity, double blend, MapQualityPreset quality, double? frameRate, bool keepAudio,
+        bool seamlessLoop, double loopDuration, bool stabilize,
         IProgress<RenderProgress> progress, CancellationToken cancellationToken)
     {
         var outputDirectory = Path.GetDirectoryName(Path.GetFullPath(output))
@@ -116,48 +165,83 @@ internal sealed class DynamicMapService
         var hasAlpha = removeBackground || analysis.Video.HasAlpha;
         var crf = quality switch { MapQualityPreset.Alta => 20, MapQualityPreset.Compacta => 34, _ => 28 };
         var cpuUsed = quality switch { MapQualityPreset.Alta => 2, MapQualityPreset.Compacta => 4, _ => 3 };
-        var filter = BuildRenderFilter(analysis, removeBackground, similarity, blend, frameRate);
-        var arguments = DecoderArguments(analysis.Video);
-        arguments.AddRange(["-y", "-hide_banner", "-progress", "pipe:1", "-nostats", "-i", input]);
-        if (!string.IsNullOrWhiteSpace(filter)) arguments.AddRange(["-vf", filter]);
-        arguments.AddRange(["-map", "0:v:0", "-c:v", "libvpx-vp9", "-pix_fmt", hasAlpha ? "yuva420p" : "yuv420p",
-            "-b:v", "0", "-crf", crf.ToString(CultureInfo.InvariantCulture), "-deadline", "good",
-            "-cpu-used", cpuUsed.ToString(CultureInfo.InvariantCulture), "-row-mt", "1", "-tile-columns", "2", "-g", "120"]);
-        if (keepAudio && analysis.Video.HasAudio)
-            arguments.AddRange(["-map", "0:a?", "-c:a", "libopus", "-b:a", "96k"]);
-        else
-            arguments.Add("-an");
-        arguments.Add(temporaryOutput);
-
-        var psi = CreateProcess(_ffmpeg, arguments, redirectOutput: true);
-        using var process = new Process { StartInfo = psi };
-        var errors = new StringBuilder();
-        process.ErrorDataReceived += (_, eventArgs) => { if (eventArgs.Data is not null) errors.AppendLine(eventArgs.Data); };
-        var completed = false;
+        string? transformsPath = null;
         try
         {
-            process.Start();
-            process.BeginErrorReadLine();
-            using var registration = cancellationToken.Register(() => { try { if (!process.HasExited) process.Kill(true); } catch { } });
-            while (!process.StandardOutput.EndOfStream)
+            string? stabilizationFilter = null;
+            if (stabilize)
             {
-                var line = await process.StandardOutput.ReadLineAsync(cancellationToken) ?? "";
-                if (line.StartsWith("out_time_ms=") && long.TryParse(line[12..], out var micros))
-                {
-                    var percent = Math.Clamp(micros / 1_000_000d / analysis.Video.Duration * 100, 0, 99.5);
-                    progress.Report(new RenderProgress(percent, $"Otimizando mapa para Foundry... {percent:0}%"));
-                }
+                transformsPath = Path.Combine(Path.GetTempPath(), "VFL-estabilizacao-" + Guid.NewGuid().ToString("N") + ".trf");
+                progress.Report(new RenderProgress(1, "Analisando tremidas e movimentos da câmera..."));
+                await DetectStabilizationAsync(input, analysis.Video, transformsPath, cancellationToken);
+                stabilizationFilter = $"vidstabtransform=input='{EscapeFilterPath(transformsPath)}':smoothing=15:optzoom=2:zoomspeed=0.15:interpol=bicubic";
             }
-            await process.WaitForExitAsync(cancellationToken);
-            if (process.ExitCode != 0)
-                throw new InvalidOperationException("Falha ao gerar o mapa WebM.\n" + errors.ToString()[^Math.Min(errors.Length, 3000)..]);
-            File.Move(temporaryOutput, output, true);
-            completed = true;
-            progress.Report(new RenderProgress(100, "Mapa WebM otimizado concluído!"));
+
+            var arguments = DecoderArguments(analysis.Video);
+            arguments.AddRange(["-y", "-hide_banner", "-progress", "pipe:1", "-nostats", "-i", input]);
+            var effectiveDuration = analysis.Video.Duration;
+            if (seamlessLoop)
+            {
+                var fade = ClampLoopDuration(analysis.Video.Duration, loopDuration);
+                effectiveDuration -= fade;
+                var targetFps = frameRate ?? Math.Clamp(analysis.Video.FrameRate, 12, 60);
+                var filter = BuildSeamlessFilter(analysis, removeBackground, similarity, blend, targetFps, fade,
+                    keepAudio && analysis.Video.HasAudio, stabilizationFilter);
+                arguments.AddRange(["-filter_complex", filter, "-map", "[vout]"]);
+                if (keepAudio && analysis.Video.HasAudio)
+                    arguments.AddRange(["-map", "[aout]", "-c:a", "libopus", "-b:a", "96k"]);
+                else
+                    arguments.Add("-an");
+            }
+            else
+            {
+                var filter = BuildRenderFilter(analysis, removeBackground, similarity, blend, frameRate, stabilizationFilter);
+                if (!string.IsNullOrWhiteSpace(filter)) arguments.AddRange(["-vf", filter]);
+                arguments.AddRange(["-map", "0:v:0"]);
+                if (keepAudio && analysis.Video.HasAudio)
+                    arguments.AddRange(["-map", "0:a?", "-c:a", "libopus", "-b:a", "96k"]);
+                else
+                    arguments.Add("-an");
+            }
+            arguments.AddRange(["-c:v", "libvpx-vp9", "-pix_fmt", hasAlpha ? "yuva420p" : "yuv420p",
+                "-b:v", "0", "-crf", crf.ToString(CultureInfo.InvariantCulture), "-deadline", "good",
+                "-cpu-used", cpuUsed.ToString(CultureInfo.InvariantCulture), "-row-mt", "1", "-tile-columns", "2", "-g", "120"]);
+            arguments.Add(temporaryOutput);
+
+            var psi = CreateProcess(_ffmpeg, arguments, redirectOutput: true);
+            using var process = new Process { StartInfo = psi };
+            var errors = new StringBuilder();
+            process.ErrorDataReceived += (_, eventArgs) => { if (eventArgs.Data is not null) errors.AppendLine(eventArgs.Data); };
+            var completed = false;
+            try
+            {
+                process.Start();
+                process.BeginErrorReadLine();
+                using var registration = cancellationToken.Register(() => { try { if (!process.HasExited) process.Kill(true); } catch { } });
+                while (!process.StandardOutput.EndOfStream)
+                {
+                    var line = await process.StandardOutput.ReadLineAsync(cancellationToken) ?? "";
+                    if (line.StartsWith("out_time_ms=") && long.TryParse(line[12..], out var micros))
+                    {
+                        var percent = Math.Clamp(micros / 1_000_000d / effectiveDuration * 100, 0, 99.5);
+                        progress.Report(new RenderProgress(percent, $"Otimizando mapa para Foundry... {percent:0}%"));
+                    }
+                }
+                await process.WaitForExitAsync(cancellationToken);
+                if (process.ExitCode != 0)
+                    throw new InvalidOperationException("Falha ao gerar o mapa WebM.\n" + errors.ToString()[^Math.Min(errors.Length, 3000)..]);
+                File.Move(temporaryOutput, output, true);
+                completed = true;
+                progress.Report(new RenderProgress(100, "Mapa WebM otimizado concluído!"));
+            }
+            finally
+            {
+                if (!completed) try { File.Delete(temporaryOutput); } catch { }
+            }
         }
         finally
         {
-            if (!completed) try { File.Delete(temporaryOutput); } catch { }
+            if (transformsPath is not null) try { File.Delete(transformsPath); } catch { }
         }
     }
 
@@ -166,9 +250,10 @@ internal sealed class DynamicMapService
         ",scale=960:540:force_original_aspect_ratio=decrease:flags=lanczos";
 
     private static string BuildRenderFilter(MapAnalysis analysis, bool removeBackground, double similarity,
-        double blend, double? frameRate)
+        double blend, double? frameRate, string? stabilizationFilter)
     {
         var filters = new List<string>();
+        if (!string.IsNullOrWhiteSpace(stabilizationFilter)) filters.Add(stabilizationFilter);
         if (removeBackground)
             filters.Add(BuildChromaFilter(analysis.BackgroundColor, similarity, blend));
         else if (analysis.Video.HasAlpha)
@@ -179,11 +264,56 @@ internal sealed class DynamicMapService
         return string.Join(',', filters);
     }
 
-    private static string BuildBaseFilter(MapAnalysis analysis, bool removeBackground, double similarity, double blend)
+    private static string BuildSeamlessFilter(MapAnalysis analysis, bool removeBackground, double similarity,
+        double blend, double frameRate, double fade, bool includeAudio, string? stabilizationFilter)
     {
-        if (removeBackground) return BuildChromaFilter(analysis.BackgroundColor, similarity, blend);
-        return analysis.Video.HasAlpha ? "format=rgba," + CleanTransparentRgb : "format=rgba";
+        var ci = CultureInfo.InvariantCulture;
+        var duration = analysis.Video.Duration;
+        var offset = duration - fade * 2;
+        var pixelFormat = removeBackground || analysis.Video.HasAlpha ? "yuva420p" : "yuv420p";
+        var video =
+            $"[0:v]{BuildBaseFilter(analysis, removeBackground, similarity, blend, stabilizationFilter)}," +
+            $"fps={frameRate.ToString("0.###", ci)},settb=AVTB,split=2[main][head];" +
+            $"[main]trim=start={fade.ToString("0.######", ci)},setpts=PTS-STARTPTS[vm];" +
+            $"[head]trim=start=0:end={fade.ToString("0.######", ci)},setpts=PTS-STARTPTS[vh];" +
+            $"[vm][vh]xfade=transition=fade:duration={fade.ToString("0.######", ci)}:" +
+            $"offset={offset.ToString("0.######", ci)},format={pixelFormat}[vout]";
+        if (!includeAudio) return video;
+        return video +
+            $";[0:a]asplit=2[amain][ahead];" +
+            $"[amain]atrim=start={fade.ToString("0.######", ci)},asetpts=PTS-STARTPTS[am];" +
+            $"[ahead]atrim=start=0:end={fade.ToString("0.######", ci)},asetpts=PTS-STARTPTS[ah];" +
+            $"[am][ah]acrossfade=d={fade.ToString("0.######", ci)}:c1=qsin:c2=qsin[aout]";
     }
+
+    private static double ClampLoopDuration(double duration, double requested)
+    {
+        if (duration < 0.75)
+            throw new InvalidOperationException("O vídeo precisa ter pelo menos 0,75 segundo para criar um loop suave.");
+        return Math.Clamp(requested, 0.10, duration / 3d);
+    }
+
+    private static string BuildBaseFilter(MapAnalysis analysis, bool removeBackground, double similarity, double blend,
+        string? stabilizationFilter = null)
+    {
+        var prefix = string.IsNullOrWhiteSpace(stabilizationFilter) ? "" : stabilizationFilter + ",";
+        if (removeBackground) return prefix + BuildChromaFilter(analysis.BackgroundColor, similarity, blend);
+        return prefix + (analysis.Video.HasAlpha ? "format=rgba," + CleanTransparentRgb : "format=rgba");
+    }
+
+    private async Task DetectStabilizationAsync(string input, VideoInfo video, string transformsPath,
+        CancellationToken cancellationToken)
+    {
+        var arguments = DecoderArguments(video);
+        arguments.AddRange(["-y", "-hide_banner", "-loglevel", "error", "-i", input, "-an", "-sn", "-dn",
+            "-vf", $"vidstabdetect=shakiness=5:accuracy=9:stepsize=6:mincontrast=0.25:result='{EscapeFilterPath(transformsPath)}'",
+            "-f", "null", "-"]);
+        await RunAsync(_ffmpeg, arguments, cancellationToken);
+    }
+
+    private static string EscapeFilterPath(string path) =>
+        path.Replace("\\", "/", StringComparison.Ordinal).Replace(":", "\\:", StringComparison.Ordinal)
+            .Replace("'", "\\'", StringComparison.Ordinal);
 
     private static string BuildChromaFilter(Color color, double similarity, double blend)
     {
