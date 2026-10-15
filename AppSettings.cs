@@ -12,6 +12,12 @@ internal sealed class AppSettings
     public decimal Rotation { get; set; }
     public string Quality { get; set; } = QualityPreset.Alta.ToString();
     public bool KeepAudio { get; set; } = true;
+    public decimal MapSimilarity { get; set; } = 0.260m;
+    public decimal MapBlend { get; set; } = 0.30m;
+    public string MapQuality { get; set; } = MapQualityPreset.Equilibrada.ToString();
+    public string MapFrameRate { get; set; } = "24 FPS";
+    public bool MapKeepAudio { get; set; }
+    public bool MapRemoveBackground { get; set; }
 
     private static string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

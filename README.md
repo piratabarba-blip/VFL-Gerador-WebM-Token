@@ -1,8 +1,14 @@
-# VFL Gerador WebM Token
+# VFL Gerador WebM Token 3.0
 
-Aplicativo Windows para transformar vídeos com fundo sólido — verde, azul ou outra cor — em tokens **WebM VP9 com transparência**, prontos para uso no Foundry VTT.
+Aplicativo Windows para criar tokens transparentes e mapas dinâmicos **WebM VP9** otimizados para Foundry VTT.
 
-![Interface do VFL Gerador WebM Token](docs/interface.png)
+### Token animado 1:1
+
+![Aba Token Animado](docs/interface-v3-token.png)
+
+### Mapa dinâmico
+
+![Aba Mapa Dinâmico](docs/interface-v3-map.png)
 
 ## Principais recursos
 
@@ -24,11 +30,24 @@ Aplicativo Windows para transformar vídeos com fundo sólido — verde, azul ou
 - Processamento totalmente local; o vídeo original nunca é alterado.
 - Interface escura.
 
+## Novo na versão 3.0 — mapas dinâmicos
+
+- Segunda aba dedicada a mapas, cenas, fundos e efeitos animados para VTT.
+- Mantém a resolução e a proporção originais do vídeo, sem enquadramento quadrado e sem cortes.
+- Chroma opcional com detecção automática de fundo verde, azul ou qualquer outra cor sólida.
+- Seletor manual de cor para corrigir fundos que não forem detectados automaticamente.
+- Prévia proporcional com linha do tempo, Play, Pausa e Stop.
+- WebM VP9 com transparência opcional e áudio Opus opcional.
+- Presets **Compacta**, **Equilibrada** e **Alta**.
+- FPS original, 30, 24 ou 15 quadros por segundo.
+- Exibe tamanho original, tamanho final e economia obtida.
+- Configurações independentes da aba de Token.
+
 ## Requisitos
 
 Windows 10 ou 11 de 64 bits. O pacote da seção **Releases** já inclui o FFmpeg necessário: não é preciso instalar Kdenlive, codecs ou outros programas.
 
-## Como usar
+## Como criar um token
 
 1. Baixe o ZIP na seção **Releases** e extraia a pasta inteira.
 2. Abra `VFL.GeradorWebMToken.exe`.
@@ -37,9 +56,19 @@ Windows 10 ou 11 de 64 bits. O pacote da seção **Releases** já inclui o FFmpe
 5. Clique em **Gerar WebM**.
 6. Importe o novo arquivo `_TOKEN.webm` no Foundry.
 
+## Como criar um mapa dinâmico
+
+1. Abra a aba **Mapa Dinâmico**.
+2. Selecione o vídeo do mapa, cena ou efeito.
+3. Mantenha o chroma desligado para apenas otimizar o vídeo.
+4. Se houver fundo sólido, ative **Remover fundo sólido** e ajuste a cor, tolerância e suavização.
+5. Confira todo o vídeo pela linha do tempo.
+6. Comece com **Equilibrada + 24 FPS** e clique em **Gerar mapa WebM**.
+7. Importe o arquivo `_MAPA_FOUNDRY.webm` no Foundry.
+
 Reprodutores comuns podem mostrar o fundo verde porque não interpretam alfa em VP9. Dentro do Foundry, o fundo fica transparente.
 
-## Configuração padrão da versão 2.0
+## Configuração padrão do Token
 
 - Tolerância: `0,260`
 - Suavização: `0,30`
@@ -50,6 +79,16 @@ Reprodutores comuns podem mostrar o fundo verde porque não interpretam alfa em 
 - Formato: `yuva420p`
 - Pixels 100% transparentes armazenam RGB preto, evitando miniaturas verdes em programas que ignoram o alpha
 - Áudio: Vorbis qualidade 4
+
+## Configuração padrão do Mapa Dinâmico
+
+- Resolução: original
+- Proporção: original
+- Qualidade: Equilibrada (`CRF 28`)
+- FPS: 24
+- Codec: VP9 com bitrate variável por qualidade
+- Chroma: desligado
+- Áudio: desligado; quando ativado usa Opus a 96 kbps
 
 ## Compilar o código
 

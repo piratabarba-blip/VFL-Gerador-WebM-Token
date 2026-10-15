@@ -8,15 +8,17 @@
     <AssemblyName>VFL.GeradorWebMToken</AssemblyName>
     <RootNamespace>VFL.GeradorWebMToken</RootNamespace>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
-    <Version>2.0.0</Version>
-    <InformationalVersion>2.0.0</InformationalVersion>
+    <Version>3.0.0</Version>
+    <AssemblyVersion>3.0.0.0</AssemblyVersion>
+    <FileVersion>3.0.0.0</FileVersion>
+    <InformationalVersion>3.0.0</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <AssemblyTitle>VFL Gerador WebM Token</AssemblyTitle>
     <Product>VFL Gerador WebM Token</Product>
     <Company>VFL</Company>
     <Copyright>Copyright © 2026 VFL</Copyright>
     <Authors>VFL</Authors>
-    <Description>Converte vídeos com fundo sólido em tokens WebM VP9 transparentes para Foundry VTT.</Description>
+    <Description>Cria tokens transparentes e mapas dinâmicos WebM VP9 otimizados para Foundry VTT.</Description>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />

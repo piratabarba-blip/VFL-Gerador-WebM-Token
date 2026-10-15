@@ -50,7 +50,7 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "VFL Gerador WebM Token";
+        Text = "VFL Gerador WebM Token 3.0";
         Size = new Size(1440, 860);
         MinimumSize = new Size(1180, 720);
         StartPosition = FormStartPosition.CenterScreen;
@@ -59,6 +59,7 @@ internal sealed class MainForm : Form
         BackColor = Theme.Background;
         Theme.ApplyIcon(this);
         BuildProfessionalUi();
+        WrapInModeTabs();
         Theme.Apply(this);
         _quality.Items.AddRange(Enum.GetNames<QualityPreset>());
         LoadSettings();
@@ -115,7 +116,7 @@ internal sealed class MainForm : Form
         topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
         topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 350));
-        topbar.Controls.Add(CreateBrand("VFL Gerador WebM Token", "VP9 TRANSPARENTE 1:1  •  v2.0"), 0, 0);
+        topbar.Controls.Add(CreateBrand("VFL Gerador WebM Token", "TOKEN VP9 TRANSPARENTE 1:1  •  v3.0"), 0, 0);
         _selectVideo.Dock = DockStyle.Fill; _selectVideo.Margin = new Padding(12, 5, 12, 5); topbar.Controls.Add(_selectVideo, 1, 0);
 
         var videoCard = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Tag = "card", Padding = new Padding(12, 4, 12, 4), Margin = new Padding(0, 2, 14, 2) };
@@ -196,6 +197,19 @@ internal sealed class MainForm : Form
             _outputFolder.Text = string.IsNullOrWhiteSpace(_output.Text) ? "Destino automático" : _output.Text;
         }
         _output.TextChanged += (_, _) => SyncOutput(); SyncOutput();
+    }
+
+    private void WrapInModeTabs()
+    {
+        if (Controls.Count == 0) return;
+        var tokenInterface = Controls[0];
+        Controls.Clear();
+
+        var tabs = new ModeTabControl { Dock = DockStyle.Fill };
+        tokenInterface.Dock = DockStyle.Fill;
+        tabs.AddTab("TOKEN ANIMADO 1:1", tokenInterface);
+        tabs.AddTab("MAPA DINÂMICO", new DynamicMapControl { Dock = DockStyle.Fill });
+        Controls.Add(tabs);
     }
 
     private Control CreateBrand(string title, string badge)
@@ -310,7 +324,7 @@ internal sealed class MainForm : Form
             Margin = Padding.Empty
         }, 0, 1);
         header.Controls.Add(title, 1, 0);
-        header.Controls.Add(new Label { Text = "PROCESSAMENTO LOCAL  |  v2.0", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleRight, Font = new Font("Segoe UI", 8.5f) }, 2, 0);
+        header.Controls.Add(new Label { Text = "PROCESSAMENTO LOCAL  |  v3.0", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleRight, Font = new Font("Segoe UI", 8.5f) }, 2, 0);
         root.Controls.Add(header, 0, 0);
 
         var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(28, 20, 28, 8), Tag = "background" };
@@ -583,17 +597,16 @@ internal sealed class MainForm : Form
 
     private void SaveSettings()
     {
-        new AppSettings
-        {
-            Similarity = _similarity.Value,
-            Blend = _blend.Value,
-            Zoom = _zoom.Value,
-            PositionX = _positionX.Value,
-            PositionY = _positionY.Value,
-            Rotation = _rotation.Value,
-            Quality = _quality.SelectedItem?.ToString() ?? QualityPreset.Alta.ToString(),
-            KeepAudio = _keepAudio.Checked
-        }.Save();
+        var settings = AppSettings.Load();
+        settings.Similarity = _similarity.Value;
+        settings.Blend = _blend.Value;
+        settings.Zoom = _zoom.Value;
+        settings.PositionX = _positionX.Value;
+        settings.PositionY = _positionY.Value;
+        settings.Rotation = _rotation.Value;
+        settings.Quality = _quality.SelectedItem?.ToString() ?? QualityPreset.Alta.ToString();
+        settings.KeepAudio = _keepAudio.Checked;
+        settings.Save();
     }
 
     private async Task RefreshPreviewAsync()
