@@ -1,8 +1,8 @@
-# VFL Gerador WebM Token 3.1
+# VFL Gerador WebM Token 3.2 Multitokens
 
 Aplicativo Windows para criar tokens transparentes e mapas dinâmicos **WebM VP9** otimizados para Foundry VTT.
 
-### Token animado 1:1
+### Multitokens animados 1:1
 
 ![Aba Token Animado](docs/interface-v3-token.png)
 
@@ -30,7 +30,22 @@ Aplicativo Windows para criar tokens transparentes e mapas dinâmicos **WebM VP9
 - Processamento totalmente local; o vídeo original nunca é alterado.
 - Interface escura.
 
-## Novo na versão 3.1 — loops contínuos e estabilização
+## Novo na versão 3.2 — Multitokens
+
+- Selecione dezenas de vídeos de uma só vez — testado com uma fila de 50 arquivos.
+- Fila rolável com estado individual: aguardando, analisando, pronto, gerando, concluído ou erro.
+- Clique em qualquer vídeo da fila para analisar e ajustar seu enquadramento individualmente.
+- Cada item preserva seus próprios valores de tolerância, suavização, zoom, posições, rotação, qualidade e áudio.
+- Botão **Aplicar ajustes a todos** para copiar o enquadramento atual para a fila inteira.
+- Seleção múltipla para remover itens sem limpar o restante da fila.
+- Escolha uma única pasta de destino para todos os tokens.
+- Geração sequencial para não sobrecarregar CPU e memória, mesmo em filas grandes.
+- Os vídeos ainda não abertos são analisados automaticamente quando chega a vez deles.
+- Progresso geral e percentual do item atual.
+- Erros isolados não interrompem os demais tokens.
+- Nomes duplicados recebem sufixos automáticos e nenhum original é alterado.
+
+## Versão 3.1 — loops contínuos e estabilização
 
 - Opção **Criar loop contínuo sem salto**, que cruza o final com o começo e deixa a repetição natural no Foundry.
 - Controle de suavização do loop entre `0,25` e `3` segundos.
@@ -57,14 +72,16 @@ Aplicativo Windows para criar tokens transparentes e mapas dinâmicos **WebM VP9
 
 Windows 10 ou 11 de 64 bits. O pacote da seção **Releases** já inclui o FFmpeg necessário: não é preciso instalar Kdenlive, codecs ou outros programas.
 
-## Como criar um token
+## Como criar vários tokens
 
 1. Baixe o ZIP na seção **Releases** e extraia a pasta inteira.
 2. Abra `VFL.GeradorWebMToken.exe`.
-3. Selecione o vídeo com fundo sólido.
-4. Confira a prévia e ajuste zoom, posições X/Y, rotação, tolerância ou suavização se necessário.
-5. Clique em **Gerar WebM**.
-6. Importe o novo arquivo `_TOKEN.webm` no Foundry.
+3. Clique em **Selecionar vídeo** e marque um ou vários arquivos com fundo sólido.
+4. Escolha um item na fila e ajuste zoom, posições X/Y, rotação, tolerância ou suavização.
+5. Repita para os itens que precisarem de enquadramento diferente, ou clique em **Aplicar ajustes a todos**.
+6. Escolha a pasta de destino no canto superior direito.
+7. Clique em **Gerar tokens**. O programa processará a fila em sequência.
+8. Importe os arquivos `_TOKEN.webm` no Foundry.
 
 ## Como criar um mapa dinâmico
 

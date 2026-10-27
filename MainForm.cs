@@ -17,13 +17,22 @@ internal sealed class MainForm : Form
     private readonly CheckerPreview _preview = new() { Dock = DockStyle.Fill };
     private readonly Panel _colorSwatch = new() { Width = 32, Height = 24 };
     private readonly Label _detected = new() { AutoSize = true, ForeColor = Theme.Muted };
-    private readonly Label _status = new() { Text = "Selecione um MP4 para começar.", AutoSize = true, ForeColor = Theme.Muted };
+    private readonly Label _status = new() { Text = "Selecione um ou vários vídeos para começar.", AutoSize = true, ForeColor = Theme.Muted };
     private readonly TokenProgressBar _progress = new() { Dock = DockStyle.Fill };
     private readonly Button _render = new() { Text = "GERAR WEBM", Tag = "primary" };
     private readonly Button _clear = new() { Text = "LIMPAR / PRÓXIMO" };
     private readonly Button _cancel = new() { Text = "CANCELAR", Enabled = false };
-    private readonly Button _selectVideo = new() { Text = "SELECIONAR VÍDEO", Tag = "primary" };
+    private readonly Button _selectVideo = new() { Text = "SELECIONAR VÍDEOS", Tag = "primary" };
     private readonly Button _selectOutput = new() { Text = "..." };
+    private readonly ListView _queueList = new()
+    {
+        Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = true,
+        HideSelection = false, HeaderStyle = ColumnHeaderStyle.Nonclickable, BorderStyle = BorderStyle.None,
+        BackColor = Theme.Surface, ForeColor = Theme.Text, OwnerDraw = true, ShowItemToolTips = true
+    };
+    private readonly Button _applyToAll = new() { Text = "APLICAR AJUSTES A TODOS" };
+    private readonly Button _removeSelected = new() { Text = "REMOVER" };
+    private readonly Label _queueCount = new() { Text = "0 VÍDEOS", ForeColor = Theme.AccentCyan, TextAlign = ContentAlignment.MiddleRight };
     private readonly Label _videoTitle = new() { Text = "Nenhum vídeo carregado", AutoEllipsis = true, ForeColor = Theme.AccentCyan };
     private readonly Label _videoMeta = new() { Text = "Selecione um arquivo para começar", AutoEllipsis = true, ForeColor = Theme.Muted };
     private readonly Label _outputFolder = new() { Text = "Destino automático", AutoEllipsis = true, ForeColor = Theme.Muted };
@@ -47,10 +56,14 @@ internal sealed class MainForm : Form
     private CancellationTokenSource? _playbackCts;
     private double _previewPositionSeconds;
     private bool _isPlaying;
+    private readonly List<TokenBatchItem> _queue = [];
+    private TokenBatchItem? _selectedItem;
+    private string _batchOutputDirectory = "";
+    private bool _loadingItem;
 
     public MainForm()
     {
-        Text = "VFL Gerador WebM Token 3.1";
+        Text = "VFL Gerador WebM Token 3.2 Multitokens";
         Size = new Size(1440, 860);
         MinimumSize = new Size(1180, 720);
         StartPosition = FormStartPosition.CenterScreen;
@@ -70,8 +83,8 @@ internal sealed class MainForm : Form
         _positionY.ValueChanged += (_, _) => SettingChanged();
         _rotation.ValueChanged += (_, _) => SettingChanged();
         _rotation.DoubleClick += (_, _) => _rotation.Value = 0;
-        _quality.SelectedIndexChanged += (_, _) => SaveSettings();
-        _keepAudio.CheckedChanged += (_, _) => SaveSettings();
+        _quality.SelectedIndexChanged += (_, _) => ExportSettingChanged();
+        _keepAudio.CheckedChanged += (_, _) => ExportSettingChanged();
         _selectVideo.Click += async (_, _) => await SelectVideoAsync();
         _selectOutput.Click += (_, _) => SelectOutput();
         _render.Click += async (_, _) => await RenderAsync();
@@ -91,7 +104,11 @@ internal sealed class MainForm : Form
         _play.Click += async (_, _) => await StartPlaybackAsync();
         _pause.Click += (_, _) => PausePlayback();
         _stop.Click += async (_, _) => await StopPlaybackAsync();
-        _clear.Click += (_, _) => ResetVideoState(true);
+        _clear.Click += (_, _) => ClearQueue();
+        _applyToAll.Click += (_, _) => ApplyCurrentSettingsToAll();
+        _removeSelected.Click += async (_, _) => await RemoveSelectedItemsAsync();
+        _queueList.SelectedIndexChanged += async (_, _) => await QueueSelectionChangedAsync();
+        UpdateQueueUi();
         FormClosed += (_, _) =>
         {
             SaveSettings();
@@ -116,7 +133,7 @@ internal sealed class MainForm : Form
         topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
         topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         topbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 350));
-        topbar.Controls.Add(CreateBrand("VFL Gerador WebM Token", "TOKEN VP9 TRANSPARENTE 1:1  •  v3.1"), 0, 0);
+        topbar.Controls.Add(CreateBrand("VFL Gerador WebM Token", "MULTITOKENS VP9 TRANSPARENTE  •  v3.2"), 0, 0);
         _selectVideo.Dock = DockStyle.Fill; _selectVideo.Margin = new Padding(12, 5, 12, 5); topbar.Controls.Add(_selectVideo, 1, 0);
 
         var videoCard = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Tag = "card", Padding = new Padding(12, 4, 12, 4), Margin = new Padding(0, 2, 14, 2) };
@@ -129,7 +146,7 @@ internal sealed class MainForm : Form
         destination.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); destination.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
         var destinationCard = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Tag = "card", Padding = new Padding(10, 4, 8, 4), Margin = new Padding(0, 2, 6, 2) };
         destinationCard.RowStyles.Add(new RowStyle(SizeType.Percent, 45)); destinationCard.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
-        destinationCard.Controls.Add(new Label { Text = "SALVAR WEBM EM", Dock = DockStyle.Fill, ForeColor = Theme.Dim, Font = new Font("Segoe UI Semibold", 7), TextAlign = ContentAlignment.BottomLeft, Margin = Padding.Empty }, 0, 0);
+        destinationCard.Controls.Add(new Label { Text = "SALVAR TODOS OS TOKENS EM", Dock = DockStyle.Fill, ForeColor = Theme.Dim, Font = new Font("Segoe UI Semibold", 7), TextAlign = ContentAlignment.BottomLeft, Margin = Padding.Empty }, 0, 0);
         _outputFolder.Dock = DockStyle.Fill; _outputFolder.Font = new Font("Consolas", 8); _outputFolder.Margin = Padding.Empty; destinationCard.Controls.Add(_outputFolder, 0, 1);
         destination.Controls.Add(destinationCard, 0, 0); _selectOutput.Dock = DockStyle.Fill; _selectOutput.Margin = new Padding(0, 5, 0, 5); destination.Controls.Add(_selectOutput, 1, 0);
         topbar.Controls.Add(destination, 3, 0); root.Controls.Add(topbar, 0, 0);
@@ -169,19 +186,45 @@ internal sealed class MainForm : Form
         workspace.Controls.Add(previewHeader, 0, 0); _preview.Margin = new Padding(18, 0, 18, 6); workspace.Controls.Add(_preview, 0, 1);
         workspace.Controls.Add(CreatePlaybackPanel(), 0, 2); main.Controls.Add(workspace, 1, 0);
 
-        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 7, Padding = new Padding(16, 14, 16, 14), Tag = "sidebar", Margin = Padding.Empty };
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 72)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 138)); right.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
-        right.Controls.Add(SectionTitle("EXPORTAÇÃO", "↗"), 0, 0);
-        right.Controls.Add(StackedCombo("QUALIDADE DO WEBM", _quality), 0, 1);
-        _keepAudio.Dock = DockStyle.Fill; _keepAudio.Padding = new Padding(8, 0, 0, 0); _keepAudio.Tag = "card"; right.Controls.Add(_keepAudio, 0, 2);
-        var specs = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5, Tag = "card", Padding = new Padding(12), Margin = new Padding(0, 8, 0, 8) };
-        foreach (var text in new[] { "1080 × 1080 pixels", "24 quadros por segundo", "WebM VP9 transparente", "Miniatura PNG automática", "Processamento 100% local" })
-            specs.Controls.Add(new Label { Text = "•  " + text, Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.3f), TextAlign = ContentAlignment.MiddleLeft });
-        right.Controls.Add(specs, 0, 3);
-        right.Controls.Add(new Label { Text = "O arquivo original permanece intacto.\n\nAlguns reprodutores mostram verde; o Foundry interpreta corretamente o canal alfa.", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 8.4f), Padding = new Padding(4, 12, 4, 4) }, 0, 4);
+        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 8, Padding = new Padding(12, 14, 12, 14), Tag = "sidebar", Margin = Padding.Empty };
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); right.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        var queueHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Tag = "sidebar", Margin = Padding.Empty };
+        queueHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); queueHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
+        queueHeader.Controls.Add(SectionTitle("FILA DE TOKENS", "≡"), 0, 0); _queueCount.Dock = DockStyle.Fill; queueHeader.Controls.Add(_queueCount, 1, 0);
+        right.Controls.Add(queueHeader, 0, 0);
+        _queueList.Columns.Add("VÍDEO", 164); _queueList.Columns.Add("ESTADO", 96); _queueList.Tag = "card";
+        _queueList.DrawColumnHeader += (_, eventArgs) =>
+        {
+            if (eventArgs.Header is null) return;
+            using var brush = new SolidBrush(Theme.Card); eventArgs.Graphics.FillRectangle(brush, eventArgs.Bounds);
+            using var font = new Font("Segoe UI Semibold", 7.5f);
+            TextRenderer.DrawText(eventArgs.Graphics, eventArgs.Header.Text, font,
+                eventArgs.Bounds, Theme.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        };
+        _queueList.DrawItem += (_, _) => { };
+        _queueList.DrawSubItem += (_, eventArgs) =>
+        {
+            if (eventArgs.Item is null || eventArgs.SubItem is null) return;
+            var selected = eventArgs.Item.Selected;
+            using var brush = new SolidBrush(selected ? Color.FromArgb(22, 78, 99) : Theme.Surface);
+            eventArgs.Graphics.FillRectangle(brush, eventArgs.Bounds);
+            TextRenderer.DrawText(eventArgs.Graphics, eventArgs.SubItem.Text, _queueList.Font, eventArgs.Bounds,
+                selected ? Color.White : eventArgs.Item.ForeColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        };
+        right.Controls.Add(_queueList, 0, 1);
+        var queueButtons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Tag = "sidebar", Margin = Padding.Empty };
+        queueButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 64)); queueButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36));
+        _applyToAll.Dock = DockStyle.Fill; _applyToAll.Margin = new Padding(0, 4, 4, 2); queueButtons.Controls.Add(_applyToAll, 0, 0);
+        _removeSelected.Dock = DockStyle.Fill; _removeSelected.Margin = new Padding(4, 4, 0, 2); queueButtons.Controls.Add(_removeSelected, 1, 0); right.Controls.Add(queueButtons, 0, 2);
+        right.Controls.Add(StackedCombo("QUALIDADE DO ITEM SELECIONADO", _quality), 0, 3);
+        _keepAudio.Dock = DockStyle.Fill; _keepAudio.Padding = new Padding(8, 0, 0, 0); _keepAudio.Tag = "card"; right.Controls.Add(_keepAudio, 0, 4);
         _render.Dock = DockStyle.Fill; _render.Tag = "success"; _render.Margin = new Padding(0, 4, 0, 2); _render.Enabled = false; right.Controls.Add(_render, 0, 5);
-        _clear.Dock = DockStyle.Fill; _clear.Margin = new Padding(0, 6, 0, 0); right.Controls.Add(_clear, 0, 6); main.Controls.Add(right, 2, 0);
+        _clear.Text = "LIMPAR FILA"; _clear.Dock = DockStyle.Fill; _clear.Margin = new Padding(0, 6, 0, 0); right.Controls.Add(_clear, 0, 6);
+        right.Controls.Add(new Label { Text = "Processamento sequencial • original preservado", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 7.5f), TextAlign = ContentAlignment.MiddleCenter }, 0, 7);
+        main.Controls.Add(right, 2, 0);
 
         var statusbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 2, Padding = new Padding(16, 4, 16, 5), Tag = "header", Margin = Padding.Empty };
         statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); statusbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
@@ -207,7 +250,7 @@ internal sealed class MainForm : Form
 
         var tabs = new ModeTabControl { Dock = DockStyle.Fill };
         tokenInterface.Dock = DockStyle.Fill;
-        tabs.AddTab("TOKEN ANIMADO 1:1", tokenInterface);
+        tabs.AddTab("MULTITOKENS 1:1", tokenInterface);
         tabs.AddTab("MAPA DINÂMICO", new DynamicMapControl { Dock = DockStyle.Fill });
         Controls.Add(tabs);
     }
@@ -275,18 +318,29 @@ internal sealed class MainForm : Form
 
     private async Task SelectVideoAsync()
     {
-        using var dialog = new OpenFileDialog { Filter = "Vídeos MP4|*.mp4|Vídeos|*.mp4;*.mov;*.mkv;*.webm", Title = "Selecione o vídeo com fundo sólido" };
+        using var dialog = new OpenFileDialog
+        {
+            Filter = "Vídeos|*.mp4;*.mov;*.mkv;*.webm|Todos os arquivos|*.*",
+            Title = "Selecione um ou vários vídeos com fundo sólido",
+            Multiselect = true
+        };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        ResetVideoState(false); _input.Text = dialog.FileName;
-        _output.Text = GetAvailableOutputPath(Path.Combine(Path.GetDirectoryName(dialog.FileName)!, Path.GetFileNameWithoutExtension(dialog.FileName) + "_TOKEN.webm"));
-        _videoTitle.Text = Path.GetFileName(dialog.FileName); _videoMeta.Text = "Detectando o fundo e preparando a prévia...";
-        await AnalyzeAsync();
+        await AddVideosAsync(dialog.FileNames);
     }
 
     private void SelectOutput()
     {
-        using var dialog = new SaveFileDialog { Filter = "WebM transparente|*.webm", DefaultExt = "webm", AddExtension = true, Title = "Salvar token WebM em", FileName = string.IsNullOrWhiteSpace(_output.Text) ? "token.webm" : Path.GetFileName(_output.Text), InitialDirectory = string.IsNullOrWhiteSpace(_output.Text) ? null : Path.GetDirectoryName(_output.Text) };
-        if (dialog.ShowDialog(this) == DialogResult.OK) _output.Text = dialog.FileName;
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Escolha a pasta onde todos os tokens serão salvos",
+            UseDescriptionForTitle = true,
+            SelectedPath = Directory.Exists(_batchOutputDirectory) ? _batchOutputDirectory : ""
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        _batchOutputDirectory = dialog.SelectedPath;
+        RebuildOutputPaths();
+        _outputFolder.Text = _batchOutputDirectory;
+        _status.Text = $"Destino da fila alterado para {_batchOutputDirectory}.";
     }
 
     private void BuildUi()
@@ -324,7 +378,7 @@ internal sealed class MainForm : Form
             Margin = Padding.Empty
         }, 0, 1);
         header.Controls.Add(title, 1, 0);
-        header.Controls.Add(new Label { Text = "PROCESSAMENTO LOCAL  |  v3.1", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleRight, Font = new Font("Segoe UI", 8.5f) }, 2, 0);
+        header.Controls.Add(new Label { Text = "PROCESSAMENTO LOCAL  |  v3.2", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleRight, Font = new Font("Segoe UI", 8.5f) }, 2, 0);
         root.Controls.Add(header, 0, 0);
 
         var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(28, 20, 28, 8), Tag = "background" };
@@ -471,64 +525,85 @@ internal sealed class MainForm : Form
         _cts = new CancellationTokenSource(); SetBusy(true);
         try
         {
-            var analyzer = new VideoAnalyzer();
-            var messages = new Progress<string>(message => _status.Text = message);
-            _analysis = await analyzer.AnalyzeAsync(_input.Text, (double)_similarity.Value, (double)_blend.Value,
-                (double)_zoom.Value, (int)_positionX.Value, (int)_positionY.Value, (double)_rotation.Value, messages, _cts.Token);
-            _colorSwatch.BackColor = _analysis.BackgroundColor;
-            _detected.Text = $"#{_analysis.BackgroundColor.R:X2}{_analysis.BackgroundColor.G:X2}{_analysis.BackgroundColor.B:X2}  •  confiança {_analysis.Confidence:P0}";
-            _preview.PreviewImage = LoadImage(_analysis.PreviewPath);
-            try { File.Delete(_analysis.PreviewPath); } catch { }
-            ConfigureTimeline();
-            SetPreviewPosition(0);
-            SetPlaybackControlsEnabled(true);
-            _videoTitle.Text = Path.GetFileName(_input.Text);
-            _videoMeta.Text = $"{FormatTime(_analysis.Video.Duration)}  •  fundo {_detected.Text}";
-            _status.Text = $"Prévia pronta • Zoom {_zoom.Value:0}% • X {_positionX.Value:+0;-0;0} • Y {_positionY.Value:+0;-0;0} • Giro {_rotation.Value:+0;-0;0}°";
+            if (_selectedItem is null) return;
+            SaveCurrentItemFromControls(false);
+            await AnalyzeItemAsync(_selectedItem, true, _cts.Token);
         }
-        catch (OperationCanceledException) { _status.Text = "Análise cancelada."; _videoMeta.Text = "Análise cancelada"; }
-        catch (Exception exception) { _status.Text = "Falha na análise."; _videoMeta.Text = "Não foi possível analisar este arquivo"; TokenDialog.ShowMessage(this, "Erro na análise", exception.Message); }
+        catch (OperationCanceledException)
+        {
+            _status.Text = "Análise cancelada."; _videoMeta.Text = "Análise cancelada";
+            if (_selectedItem is not null) { _selectedItem.Status = TokenBatchStatus.Aguardando; UpdateQueueRow(_selectedItem); }
+        }
+        catch (Exception exception)
+        {
+            _status.Text = "Falha na análise."; _videoMeta.Text = "Não foi possível analisar este arquivo";
+            if (_selectedItem is not null) { _selectedItem.Status = TokenBatchStatus.Erro; _selectedItem.Error = exception.Message; UpdateQueueRow(_selectedItem); }
+            TokenDialog.ShowMessage(this, "Erro na análise", exception.Message);
+        }
         finally { SetBusy(false); _cts.Dispose(); _cts = null; }
     }
 
     private async Task RenderAsync()
     {
-        if (_analysis is null || !File.Exists(_input.Text)) { TokenDialog.ShowMessage(this, "Análise necessária", "Analise o vídeo antes de gerar."); return; }
-        if (string.IsNullOrWhiteSpace(_output.Text)) { TokenDialog.ShowMessage(this, "Destino necessário", "Escolha o arquivo de saída."); return; }
-        if (File.Exists(_output.Text))
-        {
-            _output.Text = GetAvailableOutputPath(_output.Text);
-            _status.Text = "Novo nome criado para evitar o cache do Foundry.";
-        }
+        if (_queue.Count == 0) { TokenDialog.ShowMessage(this, "Fila vazia", "Adicione um ou vários vídeos antes de gerar."); return; }
+        if (string.IsNullOrWhiteSpace(_batchOutputDirectory))
+            _batchOutputDirectory = Path.GetDirectoryName(_queue[0].InputPath) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+        Directory.CreateDirectory(_batchOutputDirectory);
+        SaveCurrentItemFromControls(false);
         PausePlayback();
         _cts = new CancellationTokenSource(); SetBusy(true);
+        var completed = 0; var failed = 0;
         try
         {
-            var preset = Enum.Parse<QualityPreset>(_quality.SelectedItem?.ToString() ?? QualityPreset.Alta.ToString());
-            var progress = new Progress<RenderProgress>(item => { _progress.Value = (int)item.Percent; _status.Text = item.Message; });
-            await new WebmRenderer().RenderAsync(_input.Text, _output.Text, _analysis,
-                (double)_similarity.Value, (double)_blend.Value, (double)_zoom.Value,
-                (int)_positionX.Value, (int)_positionY.Value, (double)_rotation.Value,
-                preset, _keepAudio.Checked, progress, _cts.Token);
-            var thumbnailPath = Path.Combine(
-                Path.GetDirectoryName(Path.GetFullPath(_output.Text)) ?? "",
-                Path.GetFileNameWithoutExtension(_output.Text) + "_PREVIA.png");
-            var thumbnailCreated = _preview.SaveThumbnail(thumbnailPath);
-            var completedMessage = thumbnailCreated
-                ? $"WebM transparente e miniatura concluídos!\n\nMiniatura: {Path.GetFileName(thumbnailPath)}\n\nDeseja abrir a pasta?"
-                : "WebM transparente concluído!\n\nDeseja abrir a pasta?";
-            if (TokenDialog.Confirm(this, "WebM concluído", completedMessage))
-                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{_output.Text}\"") { UseShellExecute = true });
+            for (var index = 0; index < _queue.Count; index++)
+            {
+                _cts.Token.ThrowIfCancellationRequested();
+                var item = _queue[index];
+                SelectQueueItemForProcessing(item);
+                try
+                {
+                    if (item.Analysis is null)
+                        await AnalyzeItemAsync(item, false, _cts.Token);
+                    item.Status = TokenBatchStatus.Processando; item.Error = ""; UpdateQueueRow(item);
+                    item.OutputPath = GetAvailableOutputPath(item.OutputPath);
+                    if (ReferenceEquals(item, _selectedItem)) _output.Text = item.OutputPath;
+                    var itemNumber = index + 1;
+                    var progress = new Progress<RenderProgress>(renderProgress =>
+                    {
+                        var overall = ((index + renderProgress.Percent / 100d) / _queue.Count) * 100;
+                        _progress.Value = Math.Clamp((int)overall, 0, 100);
+                        if (item.Row is not null) item.Row.SubItems[1].Text = $"{renderProgress.Percent:0}%";
+                        _status.Text = $"Token {itemNumber}/{_queue.Count} • {Path.GetFileName(item.InputPath)} • {renderProgress.Percent:0}%";
+                    });
+                    await new WebmRenderer().RenderAsync(item.InputPath, item.OutputPath, item.Analysis!,
+                        (double)item.Similarity, (double)item.Blend, (double)item.Zoom,
+                        (int)item.PositionX, (int)item.PositionY, (double)item.Rotation,
+                        item.Quality, item.KeepAudio, progress, _cts.Token);
+                    await CreateThumbnailAsync(item, _cts.Token);
+                    item.Status = TokenBatchStatus.Concluido; UpdateQueueRow(item); completed++;
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception exception)
+                {
+                    item.Status = TokenBatchStatus.Erro; item.Error = exception.Message; UpdateQueueRow(item); failed++;
+                }
+            }
+            _progress.Value = 100;
+            _status.Text = $"Fila concluída • {completed} token(s) gerado(s)" + (failed > 0 ? $" • {failed} erro(s)" : "");
+            var message = $"Processamento concluído!\n\nGerados: {completed}\nErros: {failed}\n\nDestino: {_batchOutputDirectory}\n\nDeseja abrir a pasta?";
+            if (TokenDialog.Confirm(this, "Multitokens concluído", message))
+                Process.Start(new ProcessStartInfo("explorer.exe", _batchOutputDirectory) { UseShellExecute = true });
         }
-        catch (OperationCanceledException) { _status.Text = "Conversão cancelada."; }
+        catch (OperationCanceledException) { _status.Text = $"Fila cancelada • {completed} token(s) concluído(s)."; }
         catch (Exception exception) { _status.Text = "Falha na conversão."; TokenDialog.ShowMessage(this, "Erro na conversão", exception.Message); }
         finally { SetBusy(false); _cts.Dispose(); _cts = null; }
     }
 
     private void SetBusy(bool busy)
     {
-        _render.Enabled = !busy && _analysis is not null; _clear.Enabled = !busy; _cancel.Enabled = busy;
+        _render.Enabled = !busy && _queue.Count > 0; _clear.Enabled = !busy; _cancel.Enabled = busy;
         _selectVideo.Enabled = !busy; _selectOutput.Enabled = !busy;
+        _queueList.Enabled = !busy; _applyToAll.Enabled = !busy && _queue.Count > 1; _removeSelected.Enabled = !busy && _queue.Count > 0;
         _similarity.Enabled = !busy; _blend.Enabled = !busy; _zoom.Enabled = !busy;
         _positionX.Enabled = !busy; _positionY.Enabled = !busy; _rotation.Enabled = !busy; _quality.Enabled = !busy; _keepAudio.Enabled = !busy;
         _timeline.Enabled = !busy && _analysis is not null;
@@ -549,7 +624,9 @@ internal sealed class MainForm : Form
 
     private void SettingChanged()
     {
+        if (_loadingItem) return;
         SaveSettings();
+        SaveCurrentItemFromControls(true);
         PausePlayback();
         if (_analysis is not null) _videoMeta.Text = "Enquadramento alterado • atualizando prévia";
         SchedulePreviewRefresh();
@@ -578,6 +655,262 @@ internal sealed class MainForm : Form
         UpdatePreviewTime();
         SetPlaybackControlsEnabled(false);
         _status.Text = "Pronto para o próximo vídeo. Seus ajustes foram mantidos.";
+    }
+
+    private async Task AddVideosAsync(IEnumerable<string> paths)
+    {
+        SaveCurrentItemFromControls(false);
+        var existing = new HashSet<string>(_queue.Select(item => Path.GetFullPath(item.InputPath)), StringComparer.OrdinalIgnoreCase);
+        var validPaths = paths.Where(File.Exists).Select(Path.GetFullPath).Where(path => existing.Add(path)).ToArray();
+        if (validPaths.Length == 0)
+        {
+            _status.Text = "Nenhum vídeo novo foi adicionado à fila.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_batchOutputDirectory))
+            _batchOutputDirectory = Path.GetDirectoryName(validPaths[0]) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+
+        var settings = AppSettings.Load();
+        var usedOutputs = new HashSet<string>(_queue.Select(item => item.OutputPath), StringComparer.OrdinalIgnoreCase);
+        var added = new List<TokenBatchItem>();
+        _loadingItem = true;
+        try
+        {
+            foreach (var path in validPaths)
+            {
+                var output = UniqueQueueOutputPath(Path.Combine(_batchOutputDirectory,
+                    Path.GetFileNameWithoutExtension(path) + "_TOKEN.webm"), usedOutputs);
+                var item = new TokenBatchItem
+                {
+                    InputPath = path,
+                    OutputPath = output,
+                    Similarity = Clamp(settings.Similarity, _similarity.Minimum, _similarity.Maximum),
+                    Blend = Clamp(settings.Blend, _blend.Minimum, _blend.Maximum),
+                    Zoom = Clamp(settings.Zoom, _zoom.Minimum, _zoom.Maximum),
+                    PositionX = Clamp(settings.PositionX, _positionX.Minimum, _positionX.Maximum),
+                    PositionY = Clamp(settings.PositionY, _positionY.Minimum, _positionY.Maximum),
+                    Rotation = Clamp(settings.Rotation, _rotation.Minimum, _rotation.Maximum),
+                    Quality = Enum.TryParse<QualityPreset>(settings.Quality, out var quality) ? quality : QualityPreset.Alta,
+                    KeepAudio = settings.KeepAudio
+                };
+                var row = new ListViewItem(Path.GetFileName(path)) { Tag = item, ToolTipText = path };
+                row.SubItems.Add(item.DisplayStatus); item.Row = row;
+                _queue.Add(item); _queueList.Items.Add(row); added.Add(item);
+            }
+        }
+        finally { _loadingItem = false; }
+        _outputFolder.Text = _batchOutputDirectory;
+        UpdateQueueUi();
+        _status.Text = $"{added.Count} vídeo(s) adicionado(s) • {_queue.Count} na fila.";
+        await SelectQueueItemAsync(added[0]);
+    }
+
+    private async Task QueueSelectionChangedAsync()
+    {
+        if (_loadingItem || _cts is not null || _queueList.SelectedItems.Count == 0) return;
+        if (_queueList.SelectedItems[0].Tag is TokenBatchItem item && !ReferenceEquals(item, _selectedItem))
+            await SelectQueueItemAsync(item);
+    }
+
+    private async Task SelectQueueItemAsync(TokenBatchItem item)
+    {
+        if (_cts is not null) return;
+        SaveCurrentItemFromControls(false);
+        PausePlayback(); _previewDebounce.Stop(); _previewCts?.Cancel();
+        _selectedItem = item; _analysis = item.Analysis; _previewPositionSeconds = 0;
+        _loadingItem = true;
+        try
+        {
+            _input.Text = item.InputPath; _output.Text = item.OutputPath;
+            _similarity.Value = Clamp(item.Similarity, _similarity.Minimum, _similarity.Maximum);
+            _blend.Value = Clamp(item.Blend, _blend.Minimum, _blend.Maximum);
+            _zoom.Value = Clamp(item.Zoom, _zoom.Minimum, _zoom.Maximum);
+            _positionX.Value = Clamp(item.PositionX, _positionX.Minimum, _positionX.Maximum);
+            _positionY.Value = Clamp(item.PositionY, _positionY.Minimum, _positionY.Maximum);
+            _rotation.Value = Clamp(item.Rotation, _rotation.Minimum, _rotation.Maximum);
+            _quality.SelectedItem = item.Quality.ToString(); _keepAudio.Checked = item.KeepAudio;
+            foreach (ListViewItem row in _queueList.Items) row.Selected = ReferenceEquals(row.Tag, item);
+            item.Row?.EnsureVisible();
+        }
+        finally { _loadingItem = false; }
+        _videoTitle.Text = Path.GetFileName(item.InputPath);
+        _preview.PreviewImage = null; _timeline.Value = 0; UpdatePreviewTime();
+        if (item.Analysis is null)
+        {
+            _videoMeta.Text = "Detectando fundo e preparando a prévia...";
+            await AnalyzeAsync();
+        }
+        else
+        {
+            ShowAnalysisMetadata(item.Analysis);
+            ConfigureTimeline(); SetPreviewPosition(0); SetPlaybackControlsEnabled(true);
+            await RefreshPreviewAsync();
+        }
+    }
+
+    private void SelectQueueItemForProcessing(TokenBatchItem item)
+    {
+        SaveCurrentItemFromControls(false);
+        _selectedItem = item; _analysis = item.Analysis;
+        _loadingItem = true;
+        try
+        {
+            foreach (ListViewItem row in _queueList.Items) row.Selected = ReferenceEquals(row.Tag, item);
+            item.Row?.EnsureVisible();
+            _input.Text = item.InputPath; _output.Text = item.OutputPath;
+            _similarity.Value = item.Similarity; _blend.Value = item.Blend; _zoom.Value = item.Zoom;
+            _positionX.Value = item.PositionX; _positionY.Value = item.PositionY; _rotation.Value = item.Rotation;
+            _quality.SelectedItem = item.Quality.ToString(); _keepAudio.Checked = item.KeepAudio;
+        }
+        finally { _loadingItem = false; }
+        _videoTitle.Text = Path.GetFileName(item.InputPath);
+        _videoMeta.Text = item.Analysis is null ? "Analisando automaticamente para a fila..." : $"{FormatTime(item.Analysis.Video.Duration)} • pronto para gerar";
+    }
+
+    private async Task AnalyzeItemAsync(TokenBatchItem item, bool updatePreview, CancellationToken cancellationToken)
+    {
+        item.Status = TokenBatchStatus.Analisando; item.Error = ""; UpdateQueueRow(item);
+        var messages = new Progress<string>(message =>
+        {
+            if (ReferenceEquals(item, _selectedItem)) _status.Text = message;
+        });
+        var analysis = await new VideoAnalyzer().AnalyzeAsync(item.InputPath,
+            (double)item.Similarity, (double)item.Blend, (double)item.Zoom,
+            (int)item.PositionX, (int)item.PositionY, (double)item.Rotation, messages, cancellationToken);
+        item.Analysis = analysis; item.Status = TokenBatchStatus.Pronto; UpdateQueueRow(item);
+        if (ReferenceEquals(item, _selectedItem)) _analysis = analysis;
+        try
+        {
+            if (updatePreview && ReferenceEquals(item, _selectedItem))
+            {
+                _preview.PreviewImage = LoadImage(analysis.PreviewPath);
+                ShowAnalysisMetadata(analysis); ConfigureTimeline(); SetPreviewPosition(0); SetPlaybackControlsEnabled(true);
+                _status.Text = $"Prévia pronta • Zoom {item.Zoom:0}% • X {item.PositionX:+0;-0;0} • Y {item.PositionY:+0;-0;0} • Giro {item.Rotation:+0;-0;0}°";
+            }
+        }
+        finally { try { File.Delete(analysis.PreviewPath); } catch { } }
+    }
+
+    private void ShowAnalysisMetadata(AnalysisResult analysis)
+    {
+        _colorSwatch.BackColor = analysis.BackgroundColor;
+        _detected.Text = $"#{analysis.BackgroundColor.R:X2}{analysis.BackgroundColor.G:X2}{analysis.BackgroundColor.B:X2}  •  confiança {analysis.Confidence:P0}";
+        _videoMeta.Text = $"{FormatTime(analysis.Video.Duration)}  •  fundo {_detected.Text}";
+    }
+
+    private void SaveCurrentItemFromControls(bool markDirty)
+    {
+        if (_selectedItem is null || _loadingItem) return;
+        _selectedItem.Similarity = _similarity.Value; _selectedItem.Blend = _blend.Value; _selectedItem.Zoom = _zoom.Value;
+        _selectedItem.PositionX = _positionX.Value; _selectedItem.PositionY = _positionY.Value; _selectedItem.Rotation = _rotation.Value;
+        _selectedItem.Quality = Enum.TryParse<QualityPreset>(_quality.SelectedItem?.ToString(), out var quality) ? quality : QualityPreset.Alta;
+        _selectedItem.KeepAudio = _keepAudio.Checked;
+        if (!string.IsNullOrWhiteSpace(_output.Text)) _selectedItem.OutputPath = _output.Text;
+        if (markDirty && _selectedItem.Status == TokenBatchStatus.Concluido) _selectedItem.Status = TokenBatchStatus.Pronto;
+        UpdateQueueRow(_selectedItem);
+    }
+
+    private void ApplyCurrentSettingsToAll()
+    {
+        if (_selectedItem is null || _queue.Count == 0) return;
+        SaveCurrentItemFromControls(false);
+        foreach (var item in _queue)
+        {
+            item.Similarity = _selectedItem.Similarity; item.Blend = _selectedItem.Blend; item.Zoom = _selectedItem.Zoom;
+            item.PositionX = _selectedItem.PositionX; item.PositionY = _selectedItem.PositionY; item.Rotation = _selectedItem.Rotation;
+            item.Quality = _selectedItem.Quality; item.KeepAudio = _selectedItem.KeepAudio;
+            if (item.Status == TokenBatchStatus.Concluido) item.Status = TokenBatchStatus.Pronto;
+            UpdateQueueRow(item);
+        }
+        _status.Text = $"Ajustes aplicados aos {_queue.Count} vídeos da fila.";
+    }
+
+    private async Task RemoveSelectedItemsAsync()
+    {
+        if (_queueList.SelectedItems.Count == 0) return;
+        var removing = _queueList.SelectedItems.Cast<ListViewItem>().Select(row => (TokenBatchItem)row.Tag!).Distinct().ToArray();
+        if (removing.Length > 1 && !TokenDialog.Confirm(this, "Remover vídeos", $"Remover {removing.Length} vídeos da fila?")) return;
+        var nextIndex = Math.Max(0, _queue.IndexOf(removing[0]) - 1);
+        _loadingItem = true;
+        try
+        {
+            foreach (var item in removing) { if (item.Row is not null) _queueList.Items.Remove(item.Row); _queue.Remove(item); }
+        }
+        finally { _loadingItem = false; }
+        _selectedItem = null; _analysis = null; UpdateQueueUi();
+        if (_queue.Count > 0) await SelectQueueItemAsync(_queue[Math.Min(nextIndex, _queue.Count - 1)]);
+        else ResetVideoState(true);
+    }
+
+    private void ClearQueue()
+    {
+        if (_queue.Count > 0 && !TokenDialog.Confirm(this, "Limpar fila", $"Remover os {_queue.Count} vídeos da fila?")) return;
+        PausePlayback(); _previewCts?.Cancel(); _queue.Clear(); _queueList.Items.Clear();
+        _selectedItem = null; _analysis = null; _batchOutputDirectory = ""; _outputFolder.Text = "Destino automático";
+        ResetVideoState(true); UpdateQueueUi();
+    }
+
+    private void RebuildOutputPaths()
+    {
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in _queue)
+            item.OutputPath = UniqueQueueOutputPath(Path.Combine(_batchOutputDirectory,
+                Path.GetFileNameWithoutExtension(item.InputPath) + "_TOKEN.webm"), used);
+        if (_selectedItem is not null) _output.Text = _selectedItem.OutputPath;
+    }
+
+    private static string UniqueQueueOutputPath(string desiredPath, ISet<string> used)
+    {
+        var directory = Path.GetDirectoryName(desiredPath) ?? ""; var extension = Path.GetExtension(desiredPath);
+        var name = Path.GetFileNameWithoutExtension(desiredPath); var candidate = desiredPath; var suffix = 2;
+        while (used.Contains(candidate)) candidate = Path.Combine(directory, $"{name}_{suffix++}{extension}");
+        used.Add(candidate); return candidate;
+    }
+
+    private async Task CreateThumbnailAsync(TokenBatchItem item, CancellationToken cancellationToken)
+    {
+        if (item.Analysis is null) return;
+        string? previewPath = null;
+        try
+        {
+            previewPath = await new VideoAnalyzer().CreatePreviewAsync(item.InputPath, item.Analysis,
+                (double)item.Similarity, (double)item.Blend, (double)item.Zoom,
+                (int)item.PositionX, (int)item.PositionY, (double)item.Rotation, 0, cancellationToken);
+            using var image = LoadImage(previewPath);
+            var thumbnailPath = Path.Combine(Path.GetDirectoryName(item.OutputPath) ?? "",
+                Path.GetFileNameWithoutExtension(item.OutputPath) + "_PREVIA.png");
+            CheckerPreview.SaveThumbnail(image, thumbnailPath);
+        }
+        finally { if (previewPath is not null) try { File.Delete(previewPath); } catch { } }
+    }
+
+    private void UpdateQueueUi()
+    {
+        _queueCount.Text = $"{_queue.Count} VÍDEO" + (_queue.Count == 1 ? "" : "S");
+        _render.Text = _queue.Count <= 1 ? "GERAR TOKEN" : $"GERAR {_queue.Count} TOKENS";
+        _render.Enabled = _cts is null && _queue.Count > 0;
+        _applyToAll.Enabled = _cts is null && _queue.Count > 1; _removeSelected.Enabled = _cts is null && _queue.Count > 0;
+    }
+
+    private static void UpdateQueueRow(TokenBatchItem item)
+    {
+        if (item.Row is null) return;
+        item.Row.SubItems[1].Text = item.DisplayStatus;
+        item.Row.ForeColor = item.Status switch
+        {
+            TokenBatchStatus.Concluido => Theme.Success,
+            TokenBatchStatus.Erro => Theme.Primary,
+            TokenBatchStatus.Processando or TokenBatchStatus.Analisando => Theme.AccentCyan,
+            _ => Theme.Text
+        };
+        item.Row.ToolTipText = string.IsNullOrWhiteSpace(item.Error) ? item.InputPath : item.InputPath + "\n\n" + item.Error;
+    }
+
+    private void ExportSettingChanged()
+    {
+        if (_loadingItem) return;
+        SaveSettings();
+        SaveCurrentItemFromControls(true);
     }
 
     private void LoadSettings()

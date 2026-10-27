@@ -175,7 +175,7 @@ internal sealed class DynamicMapControl : UserControl
             : new Label { Text = "V", Location = new Point(0, 5), Size = new Size(44, 44), BackColor = Theme.Primary, Tag = "accent", TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI Black", 15) };
         brand.Controls.Add(mark);
         brand.Controls.Add(new Label { Text = "VFL Mapas Dinâmicos", Location = new Point(50, 3), Size = new Size(235, 25), Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right, TextAlign = ContentAlignment.BottomLeft, Font = new Font("Segoe UI Semibold", 11.5f), Margin = Padding.Empty });
-        brand.Controls.Add(new Label { Text = "WEBM VP9 PARA VTT  •  v3.1", Location = new Point(50, 29), Size = new Size(235, 16), Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right, Tag = "brand-badge", TextAlign = ContentAlignment.TopLeft, Font = new Font("Segoe UI Semibold", 6.8f), Margin = Padding.Empty });
+        brand.Controls.Add(new Label { Text = "WEBM VP9 PARA VTT  •  v3.2", Location = new Point(50, 29), Size = new Size(235, 16), Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right, Tag = "brand-badge", TextAlign = ContentAlignment.TopLeft, Font = new Font("Segoe UI Semibold", 6.8f), Margin = Padding.Empty });
         return brand;
     }
 

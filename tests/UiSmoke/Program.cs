@@ -11,6 +11,15 @@ if (args.Length > 1 && int.TryParse(args[1], out var tabIndex))
     tabs?.GetType().GetProperty("SelectedIndex")?.SetValue(tabs, tabIndex);
     Application.DoEvents();
 }
+if (args.Length > 2)
+{
+    var paths = args.Skip(2).Select(Path.GetFullPath).ToArray();
+    var addVideos = formType.GetMethod("AddVideosAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    var addTask = (Task)addVideos.Invoke(form, [paths])!;
+    while (!addTask.IsCompleted) { Application.DoEvents(); Thread.Sleep(10); }
+    addTask.GetAwaiter().GetResult();
+    Application.DoEvents();
+}
 form.PerformLayout();
 Application.DoEvents();
 foreach (var button in Descendants(form).OfType<Button>().Where(button => button.Visible))

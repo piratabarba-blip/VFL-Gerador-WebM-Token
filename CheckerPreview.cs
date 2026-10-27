@@ -40,6 +40,12 @@ internal sealed class CheckerPreview : Control
     public bool SaveThumbnail(string path)
     {
         if (_image is null) return false;
+        SaveThumbnail(_image, path);
+        return true;
+    }
+
+    public static void SaveThumbnail(Image image, string path)
+    {
 
         const int outputSize = 1080;
         const int checkerSize = 36;
@@ -57,9 +63,8 @@ internal sealed class CheckerPreview : Control
             graphics.FillRectangle(((x / checkerSize + y / checkerSize) & 1) == 0 ? light : dark, cell);
         }
 
-        graphics.DrawImage(_image, new Rectangle(0, 0, outputSize, outputSize));
+        graphics.DrawImage(image, new Rectangle(0, 0, outputSize, outputSize));
         bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
-        return true;
     }
 
     protected override void Dispose(bool disposing)
